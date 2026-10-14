@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, PropsWithChildren } from 'react';
 import { ActivityIndicator, Pressable, Text, useColorScheme, View } from 'react-native';
 import { getLocales } from 'expo-localization';
+import { PaperProvider } from 'react-native-paper';
+import { paperTheme } from '@/theme/paper';
 import { Language, messages, resolveLanguage } from '@/i18n/messages';
 import { palettes, AppColors, spacing, layout, typography } from '@/theme/tokens';
 import { Preferences, preferenceStorage, parsePreferences } from './storage';
@@ -46,7 +48,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       </>}
     </View>
   );
-  return <PreferenceContext.Provider value={{ preferences, colors, isDark, t, update, saving, saveError }}>{children}</PreferenceContext.Provider>;
+  return <PreferenceContext.Provider value={{ preferences, colors, isDark, t, update, saving, saveError }}><PaperProvider theme={paperTheme(isDark)}>{children}</PaperProvider></PreferenceContext.Provider>;
 }
 export function usePreferences() {
   const context = useContext(PreferenceContext);

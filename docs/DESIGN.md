@@ -6,6 +6,7 @@ Logo: kökteki `logo.png`, mor yazı ve açık lavanta zemin. Marka vurgusu mor;
 İstenmeyenler: yoğun mor/mavi gradyanlar, cam kartlar, neon/parlayan sınırlar, sürekli sparkle/yıldız ikonları, robot avatarı, büyük AI kahraman banner'ları, her satırın ayrı karta konması, gereksiz animasyon ve aşırı yuvarlatılmış kontroller. Kullanıcı açıkça bu yaygın AI görünümünü istemiyor.
 
 ## Görsel temel
+- Bileşen kütüphanesi **React Native Paper 5.15.3**. Tema bağlantısı, hangi kontrolün hangi kütüphaneye ait olduğu ve platformlar arası tercih `docs/UI_LIBRARY.md` içinde bağlayıcı olarak tanımlıdır. Kütüphane varsayılanı bu belgedeki marka/erişilebilirlik kurallarını geçersiz kılmaz.
 - Sistem fontu; tutarlarda hizalı rakamlar ve okunaklı hiyerarşi. Başlık, toplam ve işlem satırı ayrımı boşluk/tipografiyle yapılır.
 - Nötr yüzeyler, ince ayırıcılar, sınırlı gölge; lavanta yalnızca küçük vurgu alanlarında.
 - Mor yalnızca ana eylem, seçili durum ve marka için. Gelir/gider renkleri semantik; renk yanında metin/ikon kullan.
@@ -31,4 +32,6 @@ Raporlar: anlaşılır dönem seçimi, sınırlı grafik, görünür toplamlar. 
 - Boş, yükleniyor, hata, offline ve kota bitti durumları aynı tasarım sistemini kullanır.
 
 ## Tasarım kabulü
+Ana ekran header'ında sol üstte yalnızca kökteki `logo.png` bulunur; ayrı metin başlığı ve sürüm etiketi gösterilmez. Kare logonun orta wordmark alanı görünümde kırpılır; kaynak dosya korunur.
+14 Ekim 2026 UI revizyonu: sloganlı giriş kaldırıldı; aylık özet tek nötr yüzeyde, tutar öncelikli. İşlem satırları kategori ikonu, kısa açıklama/hesap bilgisi ve hizalı tutar içerir. Formda açık gelir/gider segmenti ve kompakt hesap/kategori/tarih grubu var; ayarlar standart seçim satırları kullanır. Native tasarım kabulü henüz bekliyor.
 Her ekran için iki tema/dil, küçük telefon/büyük yazı, klavye, ekran okuyucu ve gerçek içerik değerlendirilir. Örnek başarı: sık kullanılan bir gider kullanıcıdan yalnızca tutar ve Kaydet ister; diğer alanlar görünür ve değiştirilebilir. Tutorial kötü navigasyonu telafi etmek için kullanılmaz.

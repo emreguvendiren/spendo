@@ -18,4 +18,7 @@ test.each(['light', 'dark'] as const)('%s theme keeps normal text readable', mod
   }
   expect(contrast(colors.accent, colors.tint)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.onAccent, colors.accent)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.income, colors.incomeTint)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.expense, colors.expenseTint)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.income, colors.surface)).toBeGreaterThanOrEqual(4.5);
 });

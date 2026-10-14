@@ -11,6 +11,7 @@
 - Her geliştirmede davranışa uygun test yaz/güncelle, ilgili testleri ve tip/lint kontrollerini çalıştır. Geçmeden sonraki özelliğe ilerleme. Çalıştırılamayan kontrolü başarılı diye raporlama.
 - Yerel veriler, para hesaplamaları, tekrarlayan işlemler ve veritabanı geçişleri öncelikli doğruluk alanlarıdır.
 - Tüm renk, boşluk, tipografi ve boyut kararları merkezi tema üzerinden kullanılmalı. `docs/DESIGN.md` bağlayıcıdır.
+- UI değişikliklerinde `docs/UI_LIBRARY.md` oku: React Native Paper 5.15.3 ana bileşen kütüphanesi; Paper tema adaptörü merkezi tokenlardan beslenir. Native hesap/kategori/tarih seçicilerinde belgelenen @expo/ui sınırını koru.
 - Alışıldık mobil davranışlar, responsive düzen, erişilebilirlik ve hızlı kayıt temel gereksinimlerdir.
 - API anahtarlarını mobil pakete, EXPO_PUBLIC değişkenlerine, kaynak koduna veya test örneklerine koyma.
 - Gerçek harcama, fiş, ses, sohbet veya sırları loglama. Otomatik telemetri varsayılan kapalı.

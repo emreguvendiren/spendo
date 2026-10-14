@@ -3,6 +3,7 @@ import { Connection, Database } from './connection';
 
 export type Account = { id: string; name: string; kind: 'cash' | 'bank' | 'credit' | 'other'; currency: Currency };
 export type Category = { id: string; name: string; kind: 'income' | 'expense' };
+export type LedgerSnapshot = { accounts: Account[]; categories: Category[]; records: RecordRow[] };
 type Common = { id: string; accountId: string; amount: Money; occurredOn: string; note: string; source: 'manual' | 'import' | 'recurring' | 'assistant' };
 export type RecordInput = Common & (
   | { kind: 'income' | 'expense'; categoryId: string }
@@ -81,6 +82,24 @@ export class Ledger {
       if (error instanceof LedgerError || error instanceof MoneyError) throw error;
       throw new LedgerError('storage');
     }
+  }
+
+  /** Stable built-in identifiers are translated in the UI; no sample financial records. */
+  async bootstrap(): Promise<void> {
+    await this.run(async tx => {
+      await tx.runAsync("INSERT INTO accounts(id,name,kind,currency) VALUES ('default-cash','Cash','cash','TRY') ON CONFLICT(id) DO NOTHING", []);
+      for (const [key, kind] of [['general', 'expense'], ['food', 'expense'], ['transport', 'expense'], ['bills', 'expense'], ['salary', 'income'], ['other-income', 'income']]) {
+        await tx.runAsync('INSERT INTO categories(id,name,kind) VALUES (?,?,?) ON CONFLICT(id) DO NOTHING', [`default-${key}`, key, kind]);
+      }
+    });
+  }
+
+  snapshot(): Promise<LedgerSnapshot> {
+    return this.run(async tx => ({
+      accounts: await tx.getAllAsync<Account>('SELECT * FROM accounts ORDER BY name, id', []),
+      categories: await tx.getAllAsync<Category>('SELECT * FROM categories ORDER BY id', []),
+      records: await tx.getAllAsync<RecordRow>('SELECT * FROM records WHERE voided = 0 ORDER BY occurred_on DESC, created_at DESC, id', []),
+    }));
   }
 
   async createAccount(account: Account): Promise<void> {

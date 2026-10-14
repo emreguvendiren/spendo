@@ -1,2 +1,1 @@
-import { EmptyScreen } from '@/features/overview/empty-screen';
-export default function Transactions() { return <EmptyScreen kind="transactions" />; }
+export { default } from '@/features/ledger/transactions-screen';

@@ -23,13 +23,13 @@ test('failed persistence keeps the previous language and offers another attempt'
 test('stored theme and language are restored on launch', async () => {
   jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
   await render(<PreferencesProvider><SettingsScreen /></PreferencesProvider>);
-  await waitFor(() => expect(screen.getByRole('radio', { name: 'Dark', selected: true })).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole('radio', { name: 'Dark', checked: true })).toBeTruthy());
 });
 test('theme selection is persisted', async () => {
   await render(<PreferencesProvider><SettingsScreen /></PreferencesProvider>);
   await waitFor(() => expect(screen.getByText('Görünüm')).toBeTruthy());
   await fireEvent.press(screen.getByRole('radio', { name: 'Koyu' }));
-  await waitFor(() => expect(screen.getByRole('radio', { name: 'Koyu', selected: true })).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole('radio', { name: 'Koyu', checked: true })).toBeTruthy());
   expect(AsyncStorage.setItem).toHaveBeenCalledWith('spendo.preferences.v1', JSON.stringify({ language: 'tr', theme: 'dark' }));
 });
 test('initial storage failure can be retried without entering an unhydrated screen', async () => {

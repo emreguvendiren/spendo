@@ -50,6 +50,25 @@ test('migration is repeatable without losing data', async () => {
   expect(await ledger.balance('cash')).toEqual(money(-1200, 'TRY'));
 });
 
+test('bootstrap is idempotent and seeds no financial records', async () => {
+  await Promise.all([ledger.bootstrap(), ledger.bootstrap()]);
+  const snapshot = await ledger.snapshot();
+  expect(snapshot.accounts.filter(account => account.id === 'default-cash')).toHaveLength(1);
+  expect(snapshot.categories.filter(category => category.id.startsWith('default-'))).toHaveLength(6);
+  expect(snapshot.records).toEqual([]);
+  expect(snapshot.accounts.find(account => account.id === 'cash')?.name).toBe('Nakit');
+});
+
+test('failed bootstrap is atomic and retry completes the seed', async () => {
+  raw.exec("CREATE TRIGGER fail_seed BEFORE INSERT ON categories WHEN NEW.id = 'default-food' BEGIN SELECT RAISE(ABORT, 'test'); END;");
+  await expect(ledger.bootstrap()).rejects.toThrow('ledger.storage');
+  expect((await ledger.accounts()).some(account => account.id === 'default-cash')).toBe(false);
+  expect((await ledger.categories()).some(category => category.id.startsWith('default-'))).toBe(false);
+  raw.exec('DROP TRIGGER fail_seed');
+  await ledger.bootstrap();
+  expect((await ledger.snapshot()).categories).toHaveLength(8);
+});
+
 test('future schemas are rejected without changing data or version', async () => {
   raw.exec('PRAGMA user_version = 2');
   await expect(migrate(db)).rejects.toThrow('database.version');
