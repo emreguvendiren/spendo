@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Spendo",
+    "slug": "spendo",
+    "version": "0.1.0",
+    "scheme": "spendo",
+    "icon": "./logo.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
