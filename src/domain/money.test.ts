@@ -1,9 +1,26 @@
-import { amountText, Currency, money, MoneyError, parseAmount, subtractMoney, sumMoney } from './money';
+import { amountText, displayMoney, Currency, money, MoneyError, parseAmount, subtractMoney, sumMoney } from './money';
 
 function expectCode(action: () => unknown, code: string) {
   expect(action).toThrow(MoneyError);
   expect(action).toThrow(`money.${code}`);
 }
+
+test.each([
+  [123456, 'TRY', 'tr', '1.234,56'], [123456, 'USD', 'en', '1,234.56'],
+  [-123456, 'TRY', 'tr', '-1.234,56'], [1234567, 'JPY', 'en', '1,234,567'],
+  [1234567, 'KWD', 'tr', '1.234,567'], [99999, 'TRY', 'tr', '999,99'],
+  [0, 'TRY', 'tr', '0,00'], [Number.MAX_SAFE_INTEGER, 'TRY', 'tr', '90.071.992.547.409,91'],
+] as const)('exact grouped display: %s %s %s', (minor, currency, language, expected) => {
+  expect(displayMoney(money(minor, currency), language)).toBe(expected);
+});
+
+test('grouped display retains editable round trips at maximum safe precision', () => {
+  for (const currency of ['TRY', 'JPY', 'KWD'] as const) for (const language of ['tr', 'en'] as const) {
+    const amount = money(Number.MAX_SAFE_INTEGER, currency);
+    expect(parseAmount(displayMoney(amount, language), currency, language)).toEqual(amount);
+    expect(parseAmount(amountText(amount, language), currency, language)).toEqual(amount);
+  }
+});
 
 test.each([
   ['200', 'TRY', 'tr', 20000], [' 12,5 ', 'TRY', 'tr', 1250],

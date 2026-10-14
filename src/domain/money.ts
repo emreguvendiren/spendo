@@ -66,6 +66,15 @@ export function amountText(value: Money, language: 'tr' | 'en'): string {
   return sign + raw.slice(0, -digits) + (language === 'tr' ? ',' : '.') + raw.slice(-digits);
 }
 
+/** Group the exact integer text; never convert minor units through floating-point division. */
+export function displayMoney(value: Money, language: 'tr' | 'en'): string {
+  const decimal = language === 'tr' ? ',' : '.';
+  const separator = language === 'tr' ? '.' : ',';
+  const [whole, fraction] = amountText(value, language).split(decimal);
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, separator);
+  return fraction === undefined ? grouped : `${grouped}${decimal}${fraction}`;
+}
+
 /** Never combine currencies implicitly. Accumulate exactly and check the final safe range. */
 export function sumMoney(values: readonly Money[], currency: Currency): Money {
   digitsFor(currency);

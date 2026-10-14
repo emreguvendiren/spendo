@@ -1,18 +1,22 @@
 # Faz 1 — yerel kayıt cihaz kontrolü
 
-Durum: 14 Ekim 2026, Paper 5.15.3 UI revizyonundan sonra tip/lint ve 124 test geçti; iOS/Android Hermes export başarılı. Tarayıcıda 320/390 genişlikte sınırlı görsel kontrol yapıldı; aşağıdaki kontroller henüz gerçek cihazda yapılmadı. Faz 0'daki iPhone açılış bildirimi yeni akışın kabulü değildir. Kütüphane kuralları `UI_LIBRARY.md` içinde.
+Durum: 14 Ekim 2026, başlangıç bakiyesi düzeltme artımından sonra tip/lint ve 243 test geçti; iOS/Android Hermes export başarılı. Güncel cihaz listeleri `ARCHIVE_MONEY_QA.md`, `CATEGORY_TRANSFER_QA.md`, `TRANSFER_EDIT_QA.md`, `OPENING_QA.md` içinde. Önceki artımda tarayıcıda 320/390 genişlikte sınırlı görsel kontrol yapıldı; aşağıdaki kontroller henüz gerçek cihazda yapılmadı. Faz 0'daki iPhone açılış bildirimi yeni akışın kabulü değildir. Kütüphane kuralları `UI_LIBRARY.md`, font cihaz testleri `TYPOGRAPHY.md` içinde.
 
 1. Expo Go'da yeniden yükle. Ana Sayfa ve İşlemler'de İşlem ekle görünür; ilk açılışta Nakit/TRY ve kategoriler hazır, örnek işlem yok.
+   Geliştirme modu için güncel istisna: kullanıcının mock veri isteğiyle artık ayrı `spendo-demo.db` açılır, 4 hesap/6 aya yayılan 36 örnek kayıt sürümlü hazırlanır ve örnek modu yazısı görünür. Bu modda başlangıç/cihaz testlerini `DEVELOPMENT_DATA.md` adımlarıyla uygula. Üretim `spendo.db` için örneksiz ilk kurulum şartı devam eder.
 2. Türkçe açık temada `12,50` gider gir, kategori ve tarihi seç, açıklama ekle. Kaydet: başarı ve Geri al görünür. İşlemler'e geçince tarih, kategori, hesap ve `12,50 TRY` görünür; aynı ayın ana ekran gideri artar.
 3. `100` gelir kaydet. Gelir seçimi gelir kategorisine geçer. Gelir/Gider/Tümü filtreleri gerçekten listeyi daraltır. Geri al son kaydı ve toplam etkisini kaldırır.
 4. Boş, `0`, `1,234` ve `1e3` tutarlarını dene. Alan hatası görünür, kayıt oluşmaz. Kaydet'e art arda dokunmak tek kayıt oluşturur.
-5. Kayıt yaptıktan sonra uygulamayı tamamen kapatıp yeniden aç: kayıt korunur, hesap/kategoriler çoğalmaz. Son kayıt için Geri al yalnızca mevcut uygulama oturumunda tutulur; genel silme/düzenleme henüz yok.
+5. Kayıt yaptıktan sonra uygulamayı tamamen kapatıp yeniden aç: kayıt korunur, hesap/kategoriler çoğalmaz. Son kayıt için Geri al yalnızca mevcut uygulama oturumunda tutulur. Gelir/gider satırlarına dokunarak düzenleme/silme yeniden açılıştan sonra da erişilebilir.
 6. Paket yüklendikten sonra uçak modunda gelir/gider ekle. Kayıt için ağ gerekmez. Expo Go geliştirme paketini ilk kez indirmek için Metro bağlantısı gerekir; soğuk başlangıcın tamamen offline testi imzalı/native paketle ayrıca yapılır.
 7. English/koyu tema: `10.25` gir. Seçiciler, etiketler ve tutarlar değişir. Sistem tema ve dil tercihi yeniden açılışta korunur.
 8. Küçük ekran, yatay yön ve büyük yazı: tutar/hesap/kategori metinleri kırpılmamalı; klavye açıkken Kaydet kaydırarak erişilebilir olmalı. Decimal klavyeyi kapatma, tarih penceresini vazgeçerek kapatma ve açıklama alanını kontrol et.
 9. Geri tuşu/iOS geri gesture: dolu taslağı terk etmeden uyarı çıkar. Düzenlemeye devam et taslağı korur; Kaydetmeden çık bırakır. Kaydet sürerken ekran terk edilmez.
 10. VoiceOver/TalkBack: Tutar, tür, kategori, hesap, tarih ve Kaydet sırası; seçili değerlerin okunması, hata ve başarı geri bildirimi. Native picker'ların ekran okuyucu ve dokunma alanı davranışı cihazda incelenmeli.
+11. Ana ekran ve İşlemler'de gelir/gider satırına dokun: mevcut tutar, kategori, hesap, tarih ve açıklama dolu gelir. Tutarı, türü/kategoriyi ve ayı değiştirip kaydet: aynı kayıt güncellenir, çoğalmaz, aylık toplam doğru aya/türe taşınır. Yeniden açılışta değişiklik korunur. Geçersiz tutar kaydedilmez; dolu taslakla geri çıkış uyarısı çalışır.
+12. Düzenlemede İşlemi sil: Vazgeç kaydı korur; onay kaydı listeden ve toplamdan çıkarır. Yeniden açılışta silinmiş kayıt dönmez. Silme geri alınamaz; başlangıç/transfer satırları bu gelir/gider formunda düzenlenmez. English/koyu tema ve büyük yazıda silme/onay/başarı metinlerini kontrol et.
+13. Alt bar sırası Ana Sayfa / İşlemler / + / Raporlar / Asistan. İşlemler'in hemen sağındaki yuvarlak `+` hafif yükselir; üst kenarı dahil dokununca boş kayıt formu açılır. Geri dönünce önceki sekme korunur. Dört sekmeyi sırayla aç; iPhone home indicator/Android sistem gezinmesi ile çakışma, küçük ekran/yatay görünüm, büyük yazıda etiketlerin kırpılması ve VoiceOver/TalkBack'te İşlem ekle/Add transaction adını kontrol et. İki tema/dilde doğrula.
 
 Otomatik testler disk/açılış/seed/yazma/yenileme/geri alma hatalarını kontrollü olarak sınar; gerçek cihazda hata enjeksiyonu yapılmadı. UI testleri native picker ve navigasyon sınırlarını mock eder; görsel/native etkileşim kabulünün yerine geçmez.
 
-Açık kapsam: işlem düzenleme/genel silme, hesap ve kategori yönetimi, transfer/komisyon/iade ekranları, kurla raporlama, büyük veri için DB sayfalaması ve performans ölçümü.
+Açık kapsam: fiziksel hesap/kategori silme, komisyon/iade ekranları, kurla raporlama, büyük veri için DB sayfalaması ve performans ölçümü. Arşivleme/geri açma artık var; cihaz adımları ARCHIVE_MONEY_QA.md içinde.

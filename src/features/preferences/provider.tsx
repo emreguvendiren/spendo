@@ -6,6 +6,7 @@ import { paperTheme } from '@/theme/paper';
 import { Language, messages, resolveLanguage } from '@/i18n/messages';
 import { palettes, AppColors, spacing, layout, typography } from '@/theme/tokens';
 import { Preferences, preferenceStorage, parsePreferences } from './storage';
+import { useFontFaces } from '@/theme/fonts';
 
 type Context = {
   preferences: Preferences; colors: AppColors; isDark: boolean;
@@ -14,6 +15,7 @@ type Context = {
 };
 const PreferenceContext = createContext<Context | null>(null);
 export function PreferencesProvider({ children }: PropsWithChildren) {
+  const faces = useFontFaces();
   const systemTheme = useColorScheme();
   const [defaults] = useState<Preferences>(() => ({ language: resolveLanguage(getLocales()[0]?.languageCode), theme: 'system' }));
   const [preferences, setPreferences] = useState(defaults);
@@ -41,14 +43,14 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   if (status !== 'ready') return (
     <View style={{ flex: 1, justifyContent: 'center', padding: spacing.lg, gap: spacing.md, backgroundColor: colors.background }}>
       {status === 'loading' ? <ActivityIndicator accessibilityLabel={t.loading} color={colors.accent} /> : <>
-        <Text accessibilityRole="alert" style={{ color: colors.text, fontSize: typography.body }}>{t.loadError}</Text>
+        <Text accessibilityRole="alert" style={{ ...faces.regular, color: colors.text, fontSize: typography.body }}>{t.loadError}</Text>
         <Pressable accessibilityRole="button" onPress={() => { setStatus('loading'); setAttempt(value => value + 1); }} style={{ minHeight: layout.touchTarget, justifyContent: 'center' }}>
-          <Text style={{ color: colors.accent, fontSize: typography.body }}>{t.retry}</Text>
+          <Text style={{ ...faces.semibold, color: colors.accent, fontSize: typography.body }}>{t.retry}</Text>
         </Pressable>
       </>}
     </View>
   );
-  return <PreferenceContext.Provider value={{ preferences, colors, isDark, t, update, saving, saveError }}><PaperProvider theme={paperTheme(isDark)}>{children}</PaperProvider></PreferenceContext.Provider>;
+  return <PreferenceContext.Provider value={{ preferences, colors, isDark, t, update, saving, saveError }}><PaperProvider theme={paperTheme(isDark, faces)}>{children}</PaperProvider></PreferenceContext.Provider>;
 }
 export function usePreferences() {
   const context = useContext(PreferenceContext);

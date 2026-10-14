@@ -26,7 +26,7 @@ export default function HomeScreen() {
       {summary ? summary.map(item => <Surface elevation={0} key={item.currency} style={{ padding: spacing.lg, borderRadius: radius.panel, backgroundColor: colors.surface, gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}><Icon source="arrow-top-right" size={layout.icon} color={colors.muted} /><AppText muted>{t.expense}</AppText></View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing.sm }}>
-          <AppText variant="display" style={{ fontVariant: ['tabular-nums'], fontWeight: '600', flexShrink: 1 }}>{item.expenseValue}</AppText><AppText muted>{item.currency}</AppText>
+          <AppText variant="display" style={{ flexShrink: 1 }}>{item.expenseValue}</AppText><AppText muted>{item.currency}</AppText>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, paddingTop: spacing.lg, marginTop: spacing.md, borderTopWidth: controls.borderWidth, borderColor: colors.background }}>
           <View style={{ flexGrow: 1, minWidth: layout.summaryMinWidth, gap: spacing.sm }}><AppText muted variant="caption">{t.income}</AppText><AppText variant="heading" style={{ color: colors.income }}>{item.income}</AppText></View>
@@ -35,6 +35,8 @@ export default function HomeScreen() {
       </Surface>) : <AppText accessibilityRole="alert">{t.summaryError}</AppText>}
     </>}
     <ActionButton title={t.add} icon="plus" disabled={!snapshot} onPress={() => router.push('/entry')} />
+    <Button accessibilityLabel={t.accounts} icon="wallet-outline" disabled={!snapshot} onPress={() => router.push('/accounts')}>{t.accounts}</Button>
+    <Button accessibilityLabel={t.categories} icon="tag-outline" disabled={!snapshot} onPress={() => router.push('/categories')}>{t.categories}</Button>
     {snapshot && <View style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <AppText variant="heading">{t.recent}</AppText><Button onPress={() => router.push('/(tabs)/transactions')}>{t.viewAll}</Button>

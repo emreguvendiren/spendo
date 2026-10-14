@@ -14,5 +14,12 @@ export type AppColors = { [K in keyof typeof palettes.light]: string };
 export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, panel: 24 } as const;
 export const typography = { title: 28, heading: 20, body: 16, caption: 13, amount: 40, display: 48 } as const;
+export const fontFaces = {
+  regular: { fontFamily: 'Inter-Regular', fontWeight: 'normal' as const },
+  medium: { fontFamily: 'Inter-Medium', fontWeight: 'normal' as const },
+  semibold: { fontFamily: 'Inter-SemiBold', fontWeight: 'normal' as const },
+};
+export const textMetrics = { title: { lineHeight: 36 }, heading: { lineHeight: 28 }, body: { lineHeight: 24 }, caption: { lineHeight: 20 }, amount: { lineHeight: 48 }, display: { lineHeight: 58, letterSpacing: -1 } } as const;
 export const layout = { maxWidth: 640, touchTarget: 48, buttonHeight: 52, choiceMinWidth: 100, icon: 22, iconBadge: 44, emptyIcon: 32, summaryMinWidth: 120, headerLogoWidth: 112, headerLogoHeight: 32 } as const;
 export const controls = { borderWidth: 1, pressedOpacity: 0.7, disabledOpacity: 0.5 } as const;
+export const bottomBar = { actionSize: 56, actionIcon: 28, actionLift: 12, itemMinHeight: 56 } as const;

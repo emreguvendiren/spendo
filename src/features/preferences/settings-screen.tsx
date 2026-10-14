@@ -22,6 +22,6 @@ export default function SettingsScreen() {
       {(['system', 'light', 'dark'] as const).map(mode => option(t[mode], preferences.theme === mode, () => { void update({ ...preferences, theme: mode }); }))}
     </View>
     {saveError && <AppText accessibilityRole="alert">{t.saveError}</AppText>}
-    <View style={{ flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.md }}><Icon source="shield-check-outline" size={layout.icon} color={colors.muted} /><View style={{ flex: 1, gap: spacing.sm }}><AppText style={{ fontWeight: '600' }}>{t.privacy}</AppText><AppText muted variant="caption">{t.privacyBody}</AppText></View></View>
+    <View style={{ flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.md }}><Icon source="shield-check-outline" size={layout.icon} color={colors.muted} /><View style={{ flex: 1, gap: spacing.sm }}><AppText weight="semibold">{t.privacy}</AppText><AppText muted variant="caption">{t.privacyBody}</AppText></View></View>
   </Screen>;
 }

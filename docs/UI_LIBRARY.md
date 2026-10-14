@@ -21,6 +21,8 @@ Karar tarihi: 14 Ekim 2026. Kullanıcı mevcut UI'ı yetersiz buldu ve modern bi
 6. Ana ekranın odağı bu ayki gider, gelir ve **aylık farktır**. Aylık fark gelir−giderdir; hesap bakiyesi değildir. Fark saf para domain üzerinden hesaplanır. Para birimleri ayrı gösterilir.
 7. Nötr zemin, düz yüzey, sınırlı mor vurgu. Özet tek paneldir; işlem satırları ayrı kartlar değildir. Büyük tutar yanında para birimi küçük gösterilir. Küçük ekranda özet kolonları ve satır tutarları alta geçebilir; veriyi kırpma.
 8. Paper varsayılan görünümünü ekran başına yeniden renklendirme; ihtiyaç varsa merkezi adaptörü genişlet. Düğme loading/disabled/erişilebilirlik etiketleri korunmalı; sistem yazı ölçeği kapatılmamalı.
+9. Kullanıcının 14 Ekim isteği: alt barda İşlemler'den sonra hafif yükseltilmiş yuvarlak `+` kayıt eylemi. Mevcut Expo Router JS Tabs üzerinde özel bar, RN Pressable ve aynı aileden Paper Icon kullanır. Dört gerçek sekme korunur; ekle eylemi `/entry` Stack ekranını açar. Ölçüler `bottomBar` tokenlarında, renkler mevcut palette. İkon tek başına gösterilir, erişilebilir TR/EN eylem adı zorunludur.
+10. Tipografi Inter Regular/Medium/SemiBold statik dosyalarından beslenir. Paper adaptörü tüm MD3 font rollerini merkezi face'lere bağlar; fontWeight normaldir, ağırlık gerçek dosyayla seçilir. FontsProvider yükleme hatasında ortak sistem fallback'ini Paper'a da aktarır. Ekranlarda bağımsız fontFamily/fontWeight tanımlama; AppText weight veya ortak face'leri kullan. Ayrıntı `docs/TYPOGRAPHY.md`.
 
 ## Doğrulama ve sınırlar
 

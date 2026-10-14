@@ -1,0 +1,15 @@
+# Başlangıç bakiyesi düzeltme — cihaz kabulü
+
+14 Ekim 2026: TypeScript/ESLint ve 12 suite / 243 test geçti. Gerçek cihaz kontrolleri henüz yapılmadı. Test hesabı kullan; başlangıç bakiyesi bugünkü toplam hesap bakiyesi değildir.
+
+1. Ana Sayfa → Hesaplar → Hesap ekle: Test banka, TRY, başlangıç `1000,00`. Bu hesaptan `100,00` gider ekle; bakiye `900,00` olmalı. Hesap detayında Başlangıç bakiyesini düzelt'e dokun: alan `1000,00`, mevcut başlangıç tarihi ve hesap para birimi görünmeli.
+2. `1500,00` yapıp kaydet. Hesap bakiyesi `1.500,00` değil `1.400,00 TRY` olmalı; başlangıçtaki artış yalnız `500,00` ekler. Mevcut gider/transferler korunmalı ve gelir/gider toplamları değişmemeli. Aynı hesaba tekrar girince alan `1500,00`, tarih önceki değer olmalı. İkinci başlangıç satırı oluşmamalı.
+3. Başlangıcı `0` yap: bakiye `-100,00 TRY` olmalı. Ardından `-250,50` yap: bakiye `-350,50 TRY`. Negatif bakiye borç olarak saklanır; gelir/gider türüne dönüşmez. Başarı ekranında Geri al bulunmaz; düzeltme için formu yeniden açabilirsin.
+4. Boş, `1,234`, `1e3` ve hatalı binlik ayırıcı girip Kaydet'e bas: hata, taslağın korunması, bakiyenin değişmemesi. Geçerli değerle tekrar kaydet. Çift dokunma tek güncelleme yapmalı. Disk/stale/taşma hataları otomatik testlerle kontrollü sınandı; cihazda hata enjeksiyonu yapılmadı.
+5. Değeri değiştirip geri tuşu/iOS gesture kullan: taslak uyarısı. Düzenlemeye devam et alanı korumalı, Kaydetmeden çık bakiye değiştirmemeli. Hesap adını düzenlerken başlangıç düzeltme düğmesi devre dışı kalır; adı kaydet veya taslaktan çıkıp yeniden aç.
+6. Başlangıç kaydı olmayan aktif hesapta form `0` ve bugünkü yerel günle açılmalı; kaydet tek başlangıç oluşturmalı. Demo Nakit'in kendi başlangıç kaydı zaten vardır; eksik kayıt senaryosu otomatik testle de doğrulanır.
+7. Başlangıcı olan hesabı arşivle, Arşiv listesinden hesabı aç: mevcut başlangıç düzeltilebilmeli. Başlangıç kaydı olmayan arşivli hesapta yeni kayıt oluşturmak için hesabı arşivden çıkar mesajı görünmeli. Yeni başlangıç arşivli hesaba eklenmemeli.
+8. Uygulamayı tamamen kapatıp aç: tutar/tarih korunmalı, seed düzeltmeyi sıfırlamamalı. Paket yüklüyken uçak modunda düzeltme çalışmalı. Expo Go ilk paket indirmesi için Metro gerekir; offline soğuk açılış native build ile ayrıca kontrol edilir.
+9. English/koyu tema: `-1,234.56` girişi, hesapta `-1,234.56 TRY` gösterimi, formu yeniden açınca gruplamasız `-1234.56`. Küçük ekran/yatay yön/büyük yazı: açıklama ve Kaydet okunabilir ve klavye açıkken kaydırarak erişilebilir olmalı. VoiceOver/TalkBack hesap, bakiye alanı, tarih, hata/başarı ve düğmeleri anlaşılır okumalı.
+
+Şema v2 değişmedi. Repository atomik yazma, stale karşılaştırma ve idempotent retry kullanır; hesap/para birimi/source/kimlik değiştirilemez. Tarih ekran üzerinden değiştirilemez; mevcut başlangıcın tarihi korunur, yeni kayıt bugün oluşturulur. Gerçek dosyalı SQLite yeniden açılış testi düzeltmenin ve diğer hareketlerin kalıcılığını doğrular; Expo native sürücüsü/klavye/gesture kabulünün yerine geçmez.

@@ -1,9 +1,12 @@
 import { Text, TextProps } from 'react-native';
 import { usePreferences } from '@/features/preferences/provider';
-import { typography } from '@/theme/tokens';
-export function AppText({ variant = 'body', muted = false, style, ...props }: TextProps & { variant?: keyof typeof typography; muted?: boolean }) {
+import { typography, textMetrics, fontFaces } from '@/theme/tokens';
+import { useFontFaces } from '@/theme/fonts';
+export function AppText({ variant = 'body', muted = false, weight, style, ...props }: TextProps & { variant?: keyof typeof typography; muted?: boolean; weight?: keyof typeof fontFaces }) {
   const { colors } = usePreferences();
+  const faces = useFontFaces();
+  const face = weight ?? (['title', 'heading', 'amount', 'display'].includes(variant) ? 'semibold' : 'regular');
   return <Text selectable {...props} style={[{ color: muted ? colors.muted : colors.text, fontSize: typography[variant],
-    fontWeight: variant === 'title' || variant === 'heading' || variant === 'amount' ? '600' : '400',
-    ...(variant === 'amount' ? { fontVariant: ['tabular-nums'] as const } : {}) }, style]} />;
+    ...textMetrics[variant], ...faces[face],
+    ...(['amount', 'display'].includes(variant) ? { fontVariant: ['tabular-nums'] as const } : {}) }, style]} />;
 }

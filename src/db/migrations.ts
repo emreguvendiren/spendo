@@ -52,10 +52,35 @@ CREATE INDEX records_target ON records(target_id) WHERE target_id IS NOT NULL;
 export async function migrate(db: Database): Promise<void> {
   await db.transaction(async tx => {
     const [version] = await tx.getAllAsync<{ user_version: number }>('PRAGMA user_version', []);
-    if (!version || version.user_version > 1 || version.user_version < 0) throw new Error('database.version');
+    if (!version || version.user_version > 3 || version.user_version < 0) throw new Error('database.version');
     if (version.user_version === 0) {
       await tx.execAsync(schema);
       await tx.execAsync('PRAGMA user_version = 1');
+    }
+    if (version.user_version <= 1) {
+      await tx.execAsync('ALTER TABLE accounts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)); ALTER TABLE categories ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1));');
+      await tx.execAsync('PRAGMA user_version = 2');
+    }
+    if (version.user_version <= 2) {
+      await tx.execAsync(`CREATE TABLE transfer_fees (
+        fee_id TEXT PRIMARY KEY NOT NULL REFERENCES records(id),
+        transfer_id TEXT NOT NULL REFERENCES records(id),
+        CHECK(fee_id <> transfer_id)
+      ) STRICT;
+      CREATE INDEX transfer_fees_parent ON transfer_fees(transfer_id);
+      CREATE TRIGGER transfer_fee_valid BEFORE INSERT ON transfer_fees BEGIN
+        SELECT CASE WHEN NOT EXISTS (
+          SELECT 1 FROM records f JOIN records t ON t.id = NEW.transfer_id
+          WHERE f.id = NEW.fee_id AND f.kind = 'expense' AND t.kind = 'transfer'
+            AND f.voided = 0 AND t.voided = 0 AND f.account_id = t.account_id
+            AND f.currency = t.currency AND f.occurred_on = t.occurred_on
+        ) THEN RAISE(ABORT, 'invalid transfer fee') END;
+        SELECT CASE WHEN EXISTS (
+          SELECT 1 FROM transfer_fees l JOIN records f ON f.id = l.fee_id
+          WHERE l.transfer_id = NEW.transfer_id AND f.voided = 0
+        ) THEN RAISE(ABORT, 'duplicate transfer fee') END;
+      END;`);
+      await tx.execAsync('PRAGMA user_version = 3');
     }
   });
 }

@@ -6,7 +6,12 @@ import { usePreferences } from '@/features/preferences/provider';
 import { AppText } from '@/components/app-text';
 import { ActionButton } from '@/components/action-button';
 import { layout, radius, spacing } from '@/theme/tokens';
-export function LedgerStatus() {
+import { developmentDataEnabled } from '@/db/environment';
+export function DemoNotice() {
+  const { t } = usePreferences();
+  return developmentDataEnabled ? <AppText muted variant="caption">{t.demoNotice}</AppText> : null;
+}
+export function LedgerStatus({ showUndo = true }: { showUndo?: boolean } = {}) {
   const { loading, error, refresh, lastSaved, undo } = useLedger();
   const { t, colors } = usePreferences();
   const [busy, setBusy] = useState(false);
@@ -18,11 +23,12 @@ export function LedgerStatus() {
     try { await undo(); } catch { setFailed(true); }
     finally { lock.current = false; setBusy(false); }
   }
-  if (!loading && !error && !lastSaved && !failed) return null;
+  if (!developmentDataEnabled && !loading && !error && (!lastSaved || !showUndo) && !failed) return null;
   return <View style={{ gap: spacing.sm }}>
+    <DemoNotice />
     {loading && <ActivityIndicator accessibilityLabel={t.ledgerLoading} color={colors.accent} />}
     {error && <><AppText accessibilityRole="alert">{t.ledgerError}</AppText><ActionButton title={t.retry} disabled={loading} onPress={() => { void refresh(); }} secondary /></>}
-    {lastSaved && <View style={{ backgroundColor: colors.incomeTint, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm }}>
+    {showUndo && lastSaved && <View style={{ backgroundColor: colors.incomeTint, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm }}>
       <Icon source="check-circle-outline" color={colors.income} size={layout.icon} />
       <AppText accessibilityLiveRegion="polite" variant="caption" style={{ color: colors.income, flexGrow: 1 }}>{t.saved}</AppText>
       <Button loading={busy} disabled={busy} textColor={colors.income} onPress={() => { void reverse(); }}>{t.undo}</Button>

@@ -23,6 +23,7 @@
 
 ## Oturumun sonunda
 `docs/PROGRESS.md` güncellenmeli: değişen dosyalar, tamamlananlar, tam test komutları ve sonuçları, çalıştırılmayan kontroller, engeller ve somut sonraki adım. Önemli mimari kararlar `PROJECT_SPEC.md` karar günlüğüne eklenmeli. Kullanıcıya kısa ve doğrulanmış sonuç ver.
+Her geliştirme sonrası kullanıcıya ayrıntılı cihaz test listesi ver: hangi ekran/eylem, girilecek örnek değer, beklenen sonuç, iptal/hata/yeniden açılış ve ilgili tema/dil/büyük yazı kontrolleri. Yalnızca QA belgesine bağlantı vermekle yetinme. Otomatik geçen kontroller ile kullanıcıdan beklenen cihaz kontrolünü ayır.
 
 ## Projeye alınan Expo becerileri
 - Tema ve ortak bileşen çalışmalarında `.agents/skills/expo-design-system/SKILL.md` oku; ilgili referansları gerektiğinde aç.
