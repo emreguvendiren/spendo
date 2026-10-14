@@ -3,7 +3,7 @@ import { configure } from './connection';
 import { migrate } from './migrations';
 import { Ledger } from './ledger';
 import { developmentDataEnabled, ledgerDatabaseName } from './environment';
-import { demoData, demoHistory } from './demo';
+import { demoData, demoHistory, demoBudgets, demoGoals, demoTemplates } from './demo';
 
 /** The caller owns one ledger for the app lifecycle and closes it on teardown. */
 export async function openLedger(): Promise<Ledger> {
@@ -18,6 +18,9 @@ export async function openLedger(): Promise<Ledger> {
       await ledger.bootstrap();
       await ledger.seedDevelopment(demoData(day));
       await ledger.seedDevelopment(demoHistory(await ledger.developmentDay()), 2);
+      await ledger.seedDevelopment(demoBudgets(await ledger.developmentDay()), 3);
+      await ledger.seedDevelopment(demoGoals(await ledger.developmentDay()), 4);
+      await ledger.seedDevelopment(demoTemplates(), 5);
     }
     return ledger;
   } catch {

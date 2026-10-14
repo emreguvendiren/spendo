@@ -1,6 +1,37 @@
-import type { Account, RecordInput } from './ledger';
+import type { Account, Budget, EntryTemplate, Goal, ContributionInput, RecordInput } from './ledger';
 import { validateDay } from './ledger';
 import { money } from '@/domain/money';
+
+export function demoTemplates(): { accounts: Account[]; records: RecordInput[]; templates: EntryTemplate[] } {
+  return { accounts: [], records: [], templates: [
+    { id: 'demo-template-salary', name: 'Örnek maaş', kind: 'income', account_id: 'demo-bank', currency: 'TRY', minor: 3500000, category_id: 'default-salary', note: 'Maaş' },
+    { id: 'demo-template-rent', name: 'Örnek kira', kind: 'expense', account_id: 'demo-bank', currency: 'TRY', minor: 1000000, category_id: 'default-bills', note: 'Kira' },
+    { id: 'demo-template-coffee', name: 'Örnek kahve', kind: 'expense', account_id: 'default-cash', currency: 'TRY', minor: 9550, category_id: 'default-food', note: 'Kahve' },
+  ] };
+}
+
+export function demoGoals(day: string): { accounts: Account[]; records: RecordInput[]; goals: Goal[]; contributions: ContributionInput[] } {
+  validateDay(day);
+  return { accounts: [], records: [], goals: [
+    { id: 'demo-goal-emergency', name: 'Örnek acil durum birikimi', currency: 'TRY', target_minor: 1000000 },
+    { id: 'demo-goal-holiday', name: 'Örnek tatil', currency: 'USD', target_minor: 100000 },
+  ], contributions: [
+    { id: 'demo-contribution-emergency', goalId: 'demo-goal-emergency', amount: money(250000, 'TRY'), day },
+    { id: 'demo-contribution-holiday', goalId: 'demo-goal-holiday', amount: money(25000, 'USD'), day },
+  ] };
+}
+
+export function demoBudgets(day: string): { accounts: Account[]; records: RecordInput[]; budgets: Budget[] } {
+  validateDay(day);
+  const month = day.slice(0, 7);
+  const date = new Date(`${month}-01T12:00:00Z`); date.setUTCDate(0);
+  return { accounts: [], records: [], budgets: [
+    { month, currency: 'TRY', category_id: 'default-food', minor: 150000 },
+    { month, currency: 'TRY', category_id: 'default-transport', minor: 50000 },
+    { month, currency: 'USD', category_id: 'default-general', minor: 2500 },
+    { month: date.toISOString().slice(0, 7), currency: 'TRY', category_id: 'default-food', minor: 200000 },
+  ] };
+}
 
 /** Synthetic fixtures only. Dates anchor once to the first development launch. */
 export function demoData(day: string): { accounts: Account[]; records: RecordInput[] } {

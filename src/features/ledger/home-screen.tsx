@@ -37,6 +37,8 @@ export default function HomeScreen() {
     <ActionButton title={t.add} icon="plus" disabled={!snapshot} onPress={() => router.push('/entry')} />
     <Button accessibilityLabel={t.accounts} icon="wallet-outline" disabled={!snapshot} onPress={() => router.push('/accounts')}>{t.accounts}</Button>
     <Button accessibilityLabel={t.categories} icon="tag-outline" disabled={!snapshot} onPress={() => router.push('/categories')}>{t.categories}</Button>
+    <Button accessibilityLabel={t.goals} icon="flag-outline" disabled={!snapshot} onPress={() => router.push('/goals')}>{t.goals}</Button>
+    <Button accessibilityLabel={t.templates} icon="content-copy" disabled={!snapshot} onPress={() => router.push('/templates')}>{t.templates}</Button>
     {snapshot && <View style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <AppText variant="heading">{t.recent}</AppText><Button onPress={() => router.push('/(tabs)/transactions')}>{t.viewAll}</Button>

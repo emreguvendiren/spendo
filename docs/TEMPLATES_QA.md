@@ -1,0 +1,15 @@
+# Hızlı kayıt şablonları — cihaz kontrolü
+
+14 Ekim 2026: tip/lint ve 17 suite / 313 test geçti; iOS/Android Hermes export başarılı. Gerçek cihaz kabulü henüz yapılmadı. Şablon sadece hazır kayıt bilgileri saklar; otomatik veya zamanlanmış işlem oluşturmaz.
+
+1. Reload ve tam kapat/aç → Ana Sayfa → Kayıt şablonları. SQLite v6 geçişi önceki kayıt/bütçe/hedefleri korumalı. Demo üç şablon yükler: maaş `35.000,00 TRY`, kira `10.000,00 TRY`, kahve `95,50 TRY`. Açılışta yeni finansal kayıt oluşmamalı; değişmemiş sette hâlâ 36 işlem vardır.
+2. Örnek kahve satırına dokun: yeni gelir/gider formu `95,50`, Nakit, Yemek ve Kahve açıklamasıyla açılmalı. Tarih bugün olmalı. Kaydetmeden geri çıkınca yeni işlem/bakiye değişimi olmamalı. Tutarı `100,00` yapıp kaydet: tek yeni gider, normal Geri al davranışı. Şablon tutarı hâlâ `95,50` olmalı.
+3. Aynı şablonu yeniden açıp tekrar kaydet: önceki kaydı düzenlememeli, ayrı yeni işlem oluşturmalı. Her form kendi request kimliğini kullanır; aynı formda çift Kaydet tek kayıt oluşturur. Gelir örneğinde Gelir türü ve Maaş kategorisi gelmeli.
+4. Şablon ekle: ad Test kira, Gider, Örnek Banka, Faturalar, `1500,00`, isteğe bağlı not. Kaydet: yalnız şablon listesine eklenmeli; gider toplamı/bakiye değişmemeli. Şablon editor'ünde tarih seçimi yok; kullanınca bugünkü form açılır.
+5. Şablonu düzenle: ad/tutar/tür/hesap/kategori/not değiştirilebilir; aynı şablon güncellenmeli. Daha önce bu şablondan kaydedilmiş işlemler aynen kalmalı. Boş ad veya sıfır/negatif/fazla ondalık tutar kaydedilmemeli. Taslakla geri çıkış uyarısı çalışmalı; başarısız yazmada alanlar korunmalı.
+6. Şablonu kaldır → Vazgeç: şablon korunmalı. Onay: şablon kalkmalı, geçmiş kayıtlar korunmalı. Tam yeniden açılış/Reload örnek şablonu tekrar canlandırmamalı.
+7. Şablonun hesabını/kategorisini arşivle: Kullan satırı devre dışı, açıklama ve düzenleme erişimi açık olmalı. Yanlış aktif hesap/kategoriye sessiz geçmemeli. Editor kendi eski arşivli referansını gösterebilir; aktif hesaba/kategoriye değiştir veya arşivden çıkarınca kullanıma dönmeli.
+8. Tamamen kapatıp aç: oluşturulan/düzeltilen/kaldırılan şablonlar kalıcı olmalı. Paket yüklüyken offline şablon yönetimi ve yeni kayıt oluşturma. Expo Go ilk paket indirmesi Metro gerektirir; offline soğuk başlangıç native build ile ayrıca doğrulanır.
+9. English/koyu tema: Entry templates/Use template/Edit template, `1,000.50` giriş ve `1,000.50` gösterimi. Küçük/yatay ekran/büyük yazıda uzun ad/tutar ve hesap/kategori okunmalı; klavyede Kaydet erişilebilir olmalı. VoiceOver/TalkBack şablonu kullan/düzenle, disabled durumu ve onayları okumalı.
+
+Otomatik testler metadata CRUD/stale/retry/deleted, amount/account currency/category FK, archived history, v6 migration rollback/retry, demo edit/delete koruma ve gerçek dosyalı SQLite yeniden açılışı sınar. UI testleri editor validation/retry, bugünkü yeni ID'li taslak, preset değişmezliği, route/archived/missing, remove onayı ve EN-dark pending/committed refresh failure kapsamındadır. Native picker/klavye/gesture/görsel kabul açık.

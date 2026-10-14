@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react-native';
 import { Alert, Text, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Account, Category, Ledger, LedgerError, LedgerSnapshot, RecordInput, RecordRow } from '@/db/ledger';
+import { Account, Budget, EntryTemplate, Goal, Contribution, ContributionInput, Category, Ledger, LedgerError, LedgerSnapshot, RecordInput, RecordRow } from '@/db/ledger';
 import { Money } from '@/domain/money';
 import { PreferencesProvider } from '@/features/preferences/provider';
 import { LedgerProvider, useLedger } from '@/features/ledger/provider';
@@ -14,6 +14,12 @@ import CategoryScreen from '@/features/ledger/category-screen';
 import CategoriesScreen from '@/features/ledger/categories-screen';
 import TransferScreen from '@/features/ledger/transfer-screen';
 import OpeningScreen from '@/features/ledger/opening-screen';
+import ReportsScreen from '@/features/reports/reports-screen';
+import BudgetScreen from '@/features/budgets/budget-screen';
+import GoalScreen from '@/features/goals/goal-screen';
+import GoalsScreen from '@/features/goals/goals-screen';
+import TemplatesScreen from '@/features/templates/templates-screen';
+import { moveMonth } from '@/features/reports/model';
 import { localDay, monthSummary } from '@/features/ledger/model';
 import { useRouter } from 'expo-router';
 
@@ -35,6 +41,8 @@ function fakeLedger() {
     categories: [{ id: 'default-general', name: 'General', kind: 'expense' }, { id: 'default-salary', name: 'Salary', kind: 'income' }], records: [],
   };
   const api = {
+    setTemplate: jest.fn(async (input: EntryTemplate): Promise<void> => { state = { ...state, templates: [...(state.templates ?? []).filter(item => item.id !== input.id), input] }; }),
+    removeTemplate: jest.fn(async (input: EntryTemplate): Promise<void> => { state = { ...state, templates: state.templates?.filter(item => item.id !== input.id) }; }),
     bootstrap: jest.fn().mockResolvedValue(undefined), close: jest.fn().mockResolvedValue(undefined),
     snapshot: jest.fn(async () => ({ ...state, records: [...state.records] })),
     post: jest.fn(async (input: RecordInput): Promise<RecordRow> => {
@@ -44,7 +52,22 @@ function fakeLedger() {
       state = { ...state, records: [row, ...state.records] };
       return row;
     }),
-    voidRecord: jest.fn(async (id: string) => { state = { ...state, records: state.records.filter(row => row.id !== id) }; }),
+    voidRecord: jest.fn(async (id: string) => {
+      const ids = new Set([id, ...(state.feeLinks?.filter(link => link.transfer_id === id).map(link => link.fee_id) ?? [])]);
+      state = { ...state, records: state.records.filter(row => !ids.has(row.id)), feeLinks: state.feeLinks?.filter(link => !ids.has(link.fee_id)) };
+    }),
+    writeTransfer: jest.fn(async (input: Extract<RecordInput, { kind: 'transfer' }>, fee: import('@/db/ledger').TransferFeeInput | null, expected?: RecordRow, expectedFee?: RecordRow | null): Promise<RecordRow> => {
+      const row: RecordRow = { id: input.id, kind: 'transfer', account_id: input.accountId, currency: input.amount.currency, minor: input.amount.minor, category_id: null, target_id: input.targetId, target_currency: input.targetAmount.currency, target_minor: input.targetAmount.minor, occurred_on: input.occurredOn, created_at: expected?.created_at ?? new Date().toISOString(), note: input.note, source: input.source, voided: 0 };
+      const oldIds = new Set([input.id, ...(state.feeLinks?.filter(link => link.transfer_id === input.id).map(link => link.fee_id) ?? [])]);
+      const records = [row, ...state.records.filter(item => !oldIds.has(item.id))];
+      const feeLinks = state.feeLinks?.filter(link => link.transfer_id !== input.id) ?? [];
+      if (fee) {
+        records.push({ id: fee.id, kind: 'expense', account_id: fee.accountId, currency: fee.amount.currency, minor: fee.amount.minor, category_id: fee.categoryId, target_id: null, target_currency: null, target_minor: null, occurred_on: fee.occurredOn, created_at: expectedFee?.created_at ?? new Date().toISOString(), note: fee.note, source: fee.source, voided: 0 });
+        feeLinks.push({ fee_id: fee.id, transfer_id: input.id });
+      }
+      state = { ...state, records, feeLinks };
+      return row;
+    }),
     update: jest.fn(async (input: RecordInput, expected: RecordRow): Promise<RecordRow> => {
       const row = { ...expected, kind: input.kind, minor: input.amount.minor, currency: input.amount.currency, account_id: input.accountId,
         category_id: input.kind === 'income' || input.kind === 'expense' ? input.categoryId : null, occurred_on: input.occurredOn, note: input.note };
@@ -62,6 +85,12 @@ function fakeLedger() {
         occurred_on: day, created_at: new Date().toISOString(), category_id: null, target_id: null, target_currency: null, target_minor: null, note: '', source: 'manual', voided: 0,
       }] };
     }),
+    setGoal: jest.fn(async (input: Goal): Promise<void> => { state = { ...state, goals: [...(state.goals ?? []).filter(item => item.id !== input.id), input] }; }),
+    removeGoal: jest.fn(async (goal: Goal): Promise<void> => { state = { ...state, goals: state.goals?.filter(item => item.id !== goal.id), contributions: state.contributions?.filter(item => item.goal_id !== goal.id) }; }),
+    addContribution: jest.fn(async (input: ContributionInput): Promise<void> => { state = { ...state, contributions: [{ id: input.id, goal_id: input.goalId, minor: input.amount.minor, occurred_on: input.day, created_at: new Date().toISOString(), voided: 0 }, ...(state.contributions ?? [])] }; }),
+    removeContribution: jest.fn(async (input: Contribution): Promise<void> => { state = { ...state, contributions: state.contributions?.filter(item => item.id !== input.id) }; }),
+    setBudget: jest.fn(async (input: Budget): Promise<void> => { state = { ...state, budgets: [...(state.budgets ?? []).filter(item => !(item.month === input.month && item.currency === input.currency && item.category_id === input.category_id)), input] }; }),
+    removeBudget: jest.fn(async (input: Budget): Promise<void> => { state = { ...state, budgets: (state.budgets ?? []).filter(item => !(item.month === input.month && item.currency === input.currency && item.category_id === input.category_id)) }; }),
     setOpening: jest.fn(async (input: Extract<RecordInput, { kind: 'opening' }>, expected: RecordRow | null): Promise<RecordRow> => {
       const row: RecordRow = { ...(expected ?? { created_at: new Date().toISOString(), category_id: null, target_id: null, target_currency: null, target_minor: null, voided: 0 }), id: input.id, kind: 'opening', account_id: input.accountId, currency: input.amount.currency, minor: input.amount.minor, occurred_on: input.occurredOn, note: input.note, source: input.source };
       state = { ...state, records: [...state.records.filter(item => item.id !== row.id), row] };
@@ -175,6 +204,514 @@ test('archived account with no opening requires restore while an existing openin
   await fireEvent.changeText(screen.getByLabelText('Başlangıç bakiyesi'), '-2');
   await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
   await waitFor(() => expect(screen.getByText('Başlangıç bakiyesi kaydedildi')).toBeTruthy());
+});
+
+test('transfer fee validates category/positive precision and saves and undoes as one group', async () => {
+  const { api } = await mountTransfer();
+  await fireEvent(screen.getByTestId('transfer-source'), 'valueChange', 'default-cash');
+  await fireEvent(screen.getByTestId('transfer-target'), 'valueChange', 'target');
+  await fireEvent.changeText(screen.getByLabelText('Gönderilen tutar'), '200,25');
+  await fireEvent.changeText(screen.getByLabelText('Transfer komisyonu'), '0');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  expect(api.writeTransfer).not.toHaveBeenCalled();
+  expect(screen.getByText('Geçerli pozitif komisyon ve gider kategorisi seç; komisyon yoksa alanı boş bırak.')).toBeTruthy();
+  await fireEvent.changeText(screen.getByLabelText('Transfer komisyonu'), '1,25');
+  await fireEvent(screen.getByTestId('transfer-fee-category'), 'valueChange', 'default-salary');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  expect(api.writeTransfer).not.toHaveBeenCalled();
+  await fireEvent(screen.getByTestId('transfer-fee-category'), 'valueChange', 'default-general');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('İşlem kaydedildi')).toBeTruthy());
+  expect(api.writeTransfer).toHaveBeenCalledWith(expect.objectContaining({ amount: { minor: 20025, currency: 'TRY' } }), expect.objectContaining({ id: 'fee-request-test', kind: 'expense', accountId: 'default-cash', amount: { minor: 125, currency: 'TRY' }, categoryId: 'default-general' }), undefined, null);
+  await fireEvent.press(screen.getByRole('button', { name: 'Geri al' }));
+  await waitFor(() => expect(api.voidRecord).toHaveBeenCalledWith('request-test'));
+  expect((await api.snapshot()).feeLinks).toEqual([]);
+  expect((await api.snapshot()).records.filter(row => row.kind !== 'opening')).toEqual([]);
+});
+
+async function mountFeeEdit() {
+  const fake = fakeLedger();
+  await fake.api.createAccountWithOpening({ id: 'usd', name: 'USD', kind: 'bank', currency: 'USD' }, { minor: 0, currency: 'USD' }, localDay());
+  const original = await fake.api.writeTransfer({ id: 'parent', kind: 'transfer', accountId: 'default-cash', targetId: 'usd', amount: { minor: 100000, currency: 'TRY' }, targetAmount: { minor: 2500, currency: 'USD' }, occurredOn: '2026-09-30', note: 'Transfer', source: 'import' }, { id: 'old-fee', kind: 'expense', accountId: 'default-cash', amount: { minor: 125, currency: 'TRY' }, categoryId: 'default-general', occurredOn: '2026-09-30', note: '', source: 'import' });
+  const oldFee = (await fake.api.snapshot()).records.find(row => row.id === 'old-fee')!;
+  fake.api.writeTransfer.mockClear();
+  const view = await render(<PreferencesProvider><LedgerProvider open={fake.open}><TransferScreen recordId="parent" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByDisplayValue('1,25')).toBeTruthy());
+  return { ...fake, original, oldFee, view };
+}
+
+test('existing fee preloads and removes with a blank field while keeping transfer identity', async () => {
+  const { api, original, oldFee } = await mountFeeEdit();
+  await fireEvent.changeText(screen.getByLabelText('Transfer komisyonu'), '');
+  expect(screen.queryByTestId('transfer-fee-category')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('İşlem güncellendi')).toBeTruthy());
+  expect(api.writeTransfer).toHaveBeenCalledWith(expect.objectContaining({ id: 'parent', source: 'import' }), null, original, oldFee);
+  expect((await api.snapshot()).records.find(row => row.id === 'old-fee')).toBeUndefined();
+  expect((await api.snapshot()).records.find(row => row.id === 'parent')).toBeTruthy();
+});
+
+test('fee edit write failures and conflict preserve both amounts and retry payload', async () => {
+  const { api } = await mountFeeEdit();
+  api.writeTransfer.mockRejectedValueOnce(new Error('write')).mockRejectedValueOnce(new LedgerError('conflict'));
+  await fireEvent.changeText(screen.getByLabelText('Gönderilen tutar'), '2000,50');
+  await fireEvent.changeText(screen.getByLabelText('Transfer komisyonu'), '2,50');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Kayıt kaydedilemedi. Bilgilerin korunuyor; tekrar dene.')).toBeTruthy());
+  expect(screen.getByDisplayValue('2000,50')).toBeTruthy(); expect(screen.getByDisplayValue('2,50')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Bu kayıt değişmiş veya silinmiş. Bilgilerin korunuyor; listeden güncel kaydı yeniden aç.')).toBeTruthy());
+  expect(api.writeTransfer.mock.calls[0]).toEqual(api.writeTransfer.mock.calls[1]);
+});
+
+test('deleting a fee transfer compares both opened records and confirms removal of linked expense', async () => {
+  const { api, original, oldFee } = await mountFeeEdit();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await fireEvent.press(screen.getByRole('button', { name: 'İşlemi sil' }));
+    expect(alert.mock.calls[0][1]).toContain('bağlı komisyon gideri');
+    expect(api.voidRecord).not.toHaveBeenCalled();
+    await act(async () => { alert.mock.calls[0][2]?.[1].onPress?.(); });
+    await waitFor(() => expect(screen.getByText('İşlem silindi')).toBeTruthy());
+    expect(api.voidRecord).toHaveBeenCalledWith(original.id, original, oldFee);
+    expect((await api.snapshot()).feeLinks).toEqual([]);
+  } finally { alert.mockRestore(); }
+});
+
+test('fee list row and direct entry route both lead to the linked transfer editor', async () => {
+  const { api, open, view } = await mountFeeEdit();
+  await view.unmount();
+  const push = jest.fn(), replace = jest.fn();
+  jest.mocked(useRouter).mockReturnValue({ push, replace } as unknown as ReturnType<typeof useRouter>);
+  const list = await render(<PreferencesProvider><LedgerProvider open={open}><TransactionsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Transferi düzenle: Transfer komisyonu, 1,25 TRY, 2026-09-30' })).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'Transferi düzenle: Transfer komisyonu, 1,25 TRY, 2026-09-30' }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/transfer', params: { id: 'parent' } });
+  await list.unmount();
+  await render(<PreferencesProvider><LedgerProvider open={open}><EntryScreen recordId="old-fee" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu komisyon bağlı olduğu transfer üzerinden düzenlenir ve silinir.')).toBeTruthy());
+  expect(screen.queryByLabelText('Tutar')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Transferi düzenle' }));
+  expect(replace).toHaveBeenCalledWith({ pathname: '/transfer', params: { id: 'parent' } });
+  expect(api.update).not.toHaveBeenCalled();
+});
+
+test('English dark fee save blocks duplicate taps and retains success on refresh failure', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
+  const fake = fakeLedger();
+  await fake.api.createAccountWithOpening({ id: 'target', name: 'USD', kind: 'bank', currency: 'USD' }, { minor: 0, currency: 'USD' }, localDay());
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const save = fake.api.writeTransfer.getMockImplementation()!;
+  fake.api.writeTransfer.mockImplementationOnce(async (...args) => { await pending; return save(...args); });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><TransferScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Transfer fee')).toBeTruthy());
+  await fireEvent(screen.getByTestId('transfer-source'), 'valueChange', 'default-cash');
+  await fireEvent(screen.getByTestId('transfer-target'), 'valueChange', 'target');
+  await fireEvent.changeText(screen.getByLabelText('Amount sent'), '1,000.25');
+  await fireEvent.changeText(screen.getByLabelText('Amount received'), '25.50');
+  await fireEvent.changeText(screen.getByLabelText('Transfer fee'), '1.25');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Saving…' }));
+  expect(fake.api.writeTransfer).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText('Transfer fee').props.editable).toBe(false);
+  fake.api.snapshot.mockRejectedValueOnce(new Error('refresh'));
+  await act(async () => { release(); });
+  await waitFor(() => expect(screen.getByText('Transaction saved')).toBeTruthy());
+  expect(fake.api.writeTransfer).toHaveBeenCalledWith(expect.objectContaining({ amount: { minor: 100025, currency: 'TRY' } }), expect.objectContaining({ amount: { minor: 125, currency: 'TRY' } }), undefined, null);
+});
+
+test('reports switch month and currency and show deterministic category totals from current records', async () => {
+  const fake = fakeLedger();
+  const day = localDay(), previous = `${moveMonth(day.slice(0, 7), -1)}-15`;
+  await fake.api.createCategory({ id: 'market', name: 'Market', kind: 'expense' });
+  await fake.api.createAccountWithOpening({ id: 'usd', name: 'USD', kind: 'bank', currency: 'USD' }, { minor: 50000, currency: 'USD' }, day);
+  for (const input of [
+    { id: 'one', kind: 'expense', accountId: 'default-cash', amount: { minor: 125050, currency: 'TRY' }, categoryId: 'default-general', occurredOn: day },
+    { id: 'two', kind: 'expense', accountId: 'default-cash', amount: { minor: 25000, currency: 'TRY' }, categoryId: 'market', occurredOn: day },
+    { id: 'income', kind: 'income', accountId: 'default-cash', amount: { minor: 200000, currency: 'TRY' }, categoryId: 'default-salary', occurredOn: day },
+    { id: 'past', kind: 'expense', accountId: 'default-cash', amount: { minor: 5000, currency: 'TRY' }, categoryId: 'market', occurredOn: previous },
+    { id: 'dollars', kind: 'expense', accountId: 'usd', amount: { minor: 1050, currency: 'USD' }, categoryId: 'market', occurredOn: day },
+  ] as RecordInput[]) await fake.api.post({ ...input, note: '', source: 'manual' });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('1.500,50 TRY')).toBeTruthy());
+  expect(screen.getByText('2.000,00 TRY')).toBeTruthy(); expect(screen.getByText('499,50 TRY')).toBeTruthy();
+  expect(screen.getByText('İşlem sayısı: 3')).toBeTruthy();
+  expect(screen.getByLabelText('Market: 250,00 TRY, 17%, İşlem sayısı: 1')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Önceki ay' }));
+  expect(screen.getByLabelText('Market: 50,00 TRY, 100%, İşlem sayısı: 1')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Bu ay' }));
+  await fireEvent(screen.getByTestId('report-currency'), 'valueChange', 'USD');
+  expect(screen.getByText('-10,50 USD')).toBeTruthy();
+  expect(screen.getByLabelText('Market: 10,50 USD, 100%, İşlem sayısı: 1')).toBeTruthy();
+  expect(screen.queryByText('1.500,50 TRY')).toBeNull();
+});
+
+test('empty reports offer adding and income-only months show no expense distribution', async () => {
+  const fake = fakeLedger(); const push = jest.fn();
+  jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  const view = await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu ay ve para biriminde gelir/gider kaydı yok.')).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'İşlem ekle' }));
+  expect(push).toHaveBeenCalledWith('/entry');
+  await view.unmount();
+  await fake.api.post({ id: 'salary', kind: 'income', accountId: 'default-cash', amount: { minor: 10000, currency: 'TRY' }, categoryId: 'default-salary', occurredOn: localDay(), note: '', source: 'manual' });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu dönemde gider kaydı yok.')).toBeTruthy());
+  expect(screen.queryByText('Bu ay ve para biriminde gelir/gider kaydı yok.')).toBeNull();
+});
+
+test('reports English dark rendering and explicit overflow state', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
+  const fake = fakeLedger();
+  await fake.api.post({ id: 'cost', kind: 'expense', accountId: 'default-cash', amount: { minor: 123456, currency: 'TRY' }, categoryId: 'default-general', occurredOn: localDay(), note: '', source: 'manual' });
+  const view = await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Monthly overview')).toBeTruthy());
+  expect(screen.getByLabelText('General: 1,234.56 TRY, 100%, Transaction count: 1')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Previous month' })).toBeTruthy();
+  await view.unmount();
+  await fake.api.post({ id: 'overflow', kind: 'expense', accountId: 'default-cash', amount: { minor: Number.MAX_SAFE_INTEGER, currency: 'TRY' }, categoryId: 'default-general', occurredOn: localDay(), note: '', source: 'manual' });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.queryByText('Monthly overview')).toBeNull());
+  expect(screen.queryByText('No income or expenses for this month and currency.')).toBeNull();
+  expect(screen.getByRole('alert')).toBeTruthy();
+});
+
+test('reports keep selected period and refresh totals after records change, retaining content on read failure', async () => {
+  const fake = fakeLedger();
+  function RefreshProbe() {
+    const { refresh } = useLedger();
+    return <Pressable accessibilityRole="button" accessibilityLabel="Refresh reports" onPress={() => { void refresh(); }}><Text>Refresh reports</Text></Pressable>;
+  }
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /><RefreshProbe /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Aylık özet')).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'Önceki ay' }));
+  const previous = `${moveMonth(localDay().slice(0, 7), -1)}-15`;
+  await fake.api.post({ id: 'new-cost', kind: 'expense', accountId: 'default-cash', amount: { minor: 32150, currency: 'TRY' }, categoryId: 'default-general', occurredOn: previous, note: '', source: 'manual' });
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh reports' }));
+  await waitFor(() => expect(screen.getByLabelText('General: 321,50 TRY, 100%, İşlem sayısı: 1')).toBeTruthy());
+  const record = (await fake.api.snapshot()).records.find(row => row.id === 'new-cost')!;
+  await fake.api.update({ id: record.id, kind: 'expense', accountId: record.account_id, amount: { minor: 10000, currency: 'TRY' }, categoryId: 'default-general', occurredOn: previous, note: '', source: 'manual' }, record);
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh reports' }));
+  await waitFor(() => expect(screen.getByLabelText('General: 100,00 TRY, 100%, İşlem sayısı: 1')).toBeTruthy());
+  fake.api.snapshot.mockRejectedValueOnce(new Error('read'));
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh reports' }));
+  await waitFor(() => expect(screen.getByText('Veriler güncellenemedi. Yeniden dene.')).toBeTruthy());
+  expect(screen.getByLabelText('General: 100,00 TRY, 100%, İşlem sayısı: 1')).toBeTruthy();
+  await fake.api.voidRecord(record.id);
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh reports' }));
+  await waitFor(() => expect(screen.getByText('Bu ay ve para biriminde gelir/gider kaydı yok.')).toBeTruthy());
+});
+
+test('budget form validates limit, preserves failed draft and retries selected month/currency/category', async () => {
+  const fake = fakeLedger(), month = localDay().slice(0, 7);
+  fake.api.setBudget.mockRejectedValueOnce(new Error('write'));
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><BudgetScreen month={month} currency="TRY" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Aylık limit')).toBeTruthy());
+  await fireEvent.changeText(screen.getByLabelText('Aylık limit'), '0');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' })); expect(fake.api.setBudget).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Aylık limit'), '1.000,50');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Kayıt kaydedilemedi. Bilgilerin korunuyor; tekrar dene.')).toBeTruthy());
+  expect(screen.getByDisplayValue('1.000,50')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Bütçe kaydedildi')).toBeTruthy());
+  expect(fake.api.setBudget).toHaveBeenCalledWith({ month, currency: 'TRY', category_id: 'default-general', minor: 100050 }, null);
+  expect(fake.api.setBudget.mock.calls[0]).toEqual(fake.api.setBudget.mock.calls[1]);
+});
+
+test('budget edit preloads ungrouped limit and confirms removal without deleting expenses', async () => {
+  const fake = fakeLedger();
+  const budget: Budget = { month: localDay().slice(0, 7), currency: 'TRY', category_id: 'default-general', minor: 123456 };
+  await fake.api.setBudget(budget);
+  await fake.api.post({ id: 'cost', kind: 'expense', accountId: 'default-cash', amount: { minor: 10000, currency: 'TRY' }, categoryId: 'default-general', occurredOn: localDay(), note: '', source: 'manual' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await render(<PreferencesProvider><LedgerProvider open={fake.open}><BudgetScreen month={budget.month} currency="TRY" categoryId={budget.category_id} /></LedgerProvider></PreferencesProvider>);
+    await waitFor(() => expect(screen.getByDisplayValue('1234,56')).toBeTruthy());
+    expect(screen.getByTestId('budget-category').props.enabled).toBe(false);
+    await fireEvent.press(screen.getByRole('button', { name: 'Bütçeyi kaldır' }));
+    expect(fake.api.removeBudget).not.toHaveBeenCalled(); expect(alert.mock.calls[0][2]?.[0].style).toBe('cancel');
+    expect(alert.mock.calls[0][1]).toContain('Harcama kayıtların değişmez');
+    await act(async () => { alert.mock.calls[0][2]?.[1].onPress?.(); });
+    await waitFor(() => expect(screen.getByText('Bütçe kaldırıldı')).toBeTruthy());
+    expect(fake.api.removeBudget).toHaveBeenCalledWith(budget); expect((await fake.api.snapshot()).records).toHaveLength(1);
+  } finally { alert.mockRestore(); }
+});
+
+test('reports budget section shows remaining and excess and opens month-specific create/edit', async () => {
+  const fake = fakeLedger(), month = localDay().slice(0, 7);
+  await fake.api.setBudget({ month, currency: 'TRY', category_id: 'default-general', minor: 100000 });
+  await fake.api.post({ id: 'cost', kind: 'expense', accountId: 'default-cash', amount: { minor: 120000, currency: 'TRY' }, categoryId: 'default-general', occurredOn: localDay(), note: '', source: 'manual' });
+  const push = jest.fn(); jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><ReportsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Aşım: 200,00 TRY')).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: /Bütçeyi düzenle: General/ }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/budget', params: { month, currency: 'TRY', category: 'default-general' } });
+  await fireEvent.press(screen.getByRole('button', { name: 'Bütçe ekle' }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/budget', params: { month, currency: 'TRY' } });
+  await fireEvent.press(screen.getByRole('button', { name: 'Önceki ay' }));
+  expect(screen.getByText('Bu ay ve para biriminde bütçe yok.')).toBeTruthy();
+});
+
+test('English dark budget pending save blocks duplicates and survives failed refresh', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
+  const fake = fakeLedger(); let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; }), save = fake.api.setBudget.getMockImplementation()!;
+  fake.api.setBudget.mockImplementationOnce(async input => { await pending; await save(input); });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><BudgetScreen month="2026-09" currency="USD" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Monthly limit')).toBeTruthy());
+  await fireEvent.changeText(screen.getByLabelText('Monthly limit'), '1,234.56');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Saving…' }));
+  expect(fake.api.setBudget).toHaveBeenCalledTimes(1); expect(screen.getByLabelText('Monthly limit').props.editable).toBe(false);
+  fake.api.snapshot.mockRejectedValueOnce(new Error('read'));
+  await act(async () => { release(); });
+  await waitFor(() => expect(screen.getByText('Budget saved')).toBeTruthy());
+  expect(fake.api.setBudget).toHaveBeenCalledWith({ month: '2026-09', currency: 'USD', category_id: 'default-general', minor: 123456 }, null);
+});
+
+test('invalid budget period and missing edit cannot accidentally create a new budget', async () => {
+  const fake = fakeLedger();
+  const view = await render(<PreferencesProvider><LedgerProvider open={fake.open}><BudgetScreen month="2026-13" currency="TRY" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu bütçe veya dönem bulunamadı.')).toBeTruthy());
+  expect(screen.queryByLabelText('Aylık limit')).toBeNull(); await view.unmount();
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><BudgetScreen month="2026-10" currency="TRY" categoryId="missing" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu bütçe veya dönem bulunamadı.')).toBeTruthy());
+  expect(fake.api.setBudget).not.toHaveBeenCalled();
+});
+
+test('goal creation validates name and target and saves selected currency with identical retry', async () => {
+  const fake = fakeLedger(); fake.api.setGoal.mockRejectedValueOnce(new Error('write'));
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><GoalScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Hedef adı')).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' })); expect(fake.api.setGoal).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Hedef adı'), ' Tatil ');
+  await fireEvent.changeText(screen.getByLabelText('Hedef tutarı'), '0');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' })); expect(fake.api.setGoal).not.toHaveBeenCalled();
+  await fireEvent(screen.getByTestId('goal-currency'), 'valueChange', 'USD');
+  await fireEvent.changeText(screen.getByLabelText('Hedef tutarı'), '1.000,50');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Kayıt kaydedilemedi. Bilgilerin korunuyor; tekrar dene.')).toBeTruthy());
+  expect(screen.getByDisplayValue('1.000,50')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Hedef kaydedildi')).toBeTruthy());
+  expect(fake.api.setGoal).toHaveBeenCalledWith({ id: 'request-test', name: 'Tatil', currency: 'USD', target_minor: 100050 }, null);
+  expect(fake.api.setGoal.mock.calls[0]).toEqual(fake.api.setGoal.mock.calls[1]);
+});
+
+async function mountGoal(fake = fakeLedger()) {
+  const goal: Goal = { id: 'holiday', name: 'Tatil', currency: 'TRY', target_minor: 100000 };
+  await fake.api.setGoal(goal);
+  const view = await render(<PreferencesProvider><LedgerProvider open={fake.open}><GoalScreen goalId={goal.id} /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByDisplayValue('1000,00')).toBeTruthy());
+  return { ...fake, goal, view };
+}
+test('goal contribution errors retain draft and retry identity, live progress reaches completion', async () => {
+  const { api } = await mountGoal(); api.addContribution.mockRejectedValueOnce(new Error('write'));
+  expect(screen.queryByTestId('goal-currency')).toBeNull();
+  await fireEvent.changeText(screen.getByLabelText('Katkı tutarı'), '1200,00');
+  await fireEvent.press(screen.getByRole('button', { name: 'Katkı ekle' }));
+  await waitFor(() => expect(screen.getByText('Kayıt kaydedilemedi. Bilgilerin korunuyor; tekrar dene.')).toBeTruthy());
+  expect(screen.getByDisplayValue('1200,00')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Katkı ekle' }));
+  await waitFor(() => expect(screen.getByText('Hedef tamamlandı')).toBeTruthy());
+  expect(screen.getByText('Biriken: 1.200,00 TRY / 1.000,00 TRY')).toBeTruthy();
+  expect(api.addContribution.mock.calls[0]).toEqual(api.addContribution.mock.calls[1]);
+  expect((await api.snapshot()).records).toEqual([]);
+});
+test('goal and contribution removals require confirmation and preserve normal ledger records', async () => {
+  const fake = fakeLedger(); const goal: Goal = { id: 'holiday', name: 'Tatil', currency: 'TRY', target_minor: 100000 };
+  await fake.api.setGoal(goal); await fake.api.addContribution({ id: 'saving', goalId: goal.id, amount: { minor: 25000, currency: 'TRY' }, day: localDay() });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await render(<PreferencesProvider><LedgerProvider open={fake.open}><GoalScreen goalId={goal.id} /></LedgerProvider></PreferencesProvider>);
+    await waitFor(() => expect(screen.getByText('Kalan: 750,00 TRY')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: /^Katkıyı kaldır:/ }));
+    expect(fake.api.removeContribution).not.toHaveBeenCalled(); expect(alert.mock.calls[0][2]?.[0].style).toBe('cancel');
+    await act(async () => { alert.mock.calls[0][2]?.[1].onPress?.(); });
+    await waitFor(() => expect(screen.getByText('Kalan: 1.000,00 TRY')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'Hedefi kaldır' }));
+    expect(fake.api.removeGoal).not.toHaveBeenCalled();
+    await act(async () => { alert.mock.calls[1][2]?.[1].onPress?.(); });
+    await waitFor(() => expect(screen.getByText('Hedef kaldırıldı')).toBeTruthy());
+  } finally { alert.mockRestore(); }
+});
+test('goals list routes and unavailable edit never open a new goal accidentally', async () => {
+  const fake = fakeLedger(); await fake.api.setGoal({ id: 'holiday', name: 'Tatil', currency: 'TRY', target_minor: 100000 });
+  const push = jest.fn(); jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  const list = await render(<PreferencesProvider><LedgerProvider open={fake.open}><GoalsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Hedefi düzenle: Tatil' })).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'Hedefi düzenle: Tatil' }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/goal', params: { id: 'holiday' } });
+  await list.unmount();
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><GoalScreen goalId="missing" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu hedef bulunamadı.')).toBeTruthy());
+  expect(screen.queryByLabelText('Hedef adı')).toBeNull();
+});
+test('English dark contribution pending guard and committed refresh error preserve success', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
+  const fake = fakeLedger(); let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; }), save = fake.api.addContribution.getMockImplementation()!;
+  fake.api.addContribution.mockImplementationOnce(async input => { await pending; await save(input); });
+  const goal: Goal = { id: 'holiday', name: 'Trip', currency: 'USD', target_minor: 100000 }; await fake.api.setGoal(goal);
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><GoalScreen goalId={goal.id} /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Contribution amount')).toBeTruthy());
+  await fireEvent.changeText(screen.getByLabelText('Contribution amount'), '250.50');
+  await fireEvent.press(screen.getByRole('button', { name: 'Add contribution' })); await fireEvent.press(screen.getByRole('button', { name: 'Add contribution' }));
+  expect(fake.api.addContribution).toHaveBeenCalledTimes(1);
+  fake.api.snapshot.mockRejectedValueOnce(new Error('read'));
+  await act(async () => { release(); });
+  await waitFor(() => expect(screen.getByText('Contribution saved')).toBeTruthy());
+  expect(fake.api.addContribution).toHaveBeenCalledWith(expect.objectContaining({ amount: { minor: 25050, currency: 'USD' } }));
+});
+
+async function mountSearchList(fake = fakeLedger()) {
+  await fake.api.createAccountWithOpening({ id: 'bank', name: 'Bank', kind: 'bank', currency: 'TRY' }, { minor: 0, currency: 'TRY' }, localDay());
+  const previous = `${moveMonth(localDay().slice(0, 7), -1)}-15`;
+  await fake.api.post({ id: 'coffee', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 1250, currency: 'TRY' }, occurredOn: localDay(), note: 'İstanbul kahve', source: 'manual' });
+  await fake.api.post({ id: 'market', kind: 'expense', accountId: 'bank', categoryId: 'default-general', amount: { minor: 2000, currency: 'TRY' }, occurredOn: previous, note: 'Market geçmiş', source: 'manual' });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><TransactionsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('İşlemlerde ara')).toBeTruthy());
+  return { ...fake, previous };
+}
+test('transaction search narrows immediately and clear restores records with unchanged edit navigation', async () => {
+  const push = jest.fn(); jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  const { api } = await mountSearchList();
+  await fireEvent.changeText(screen.getByLabelText('İşlemlerde ara'), 'istanbul');
+  expect(screen.getByText('İstanbul kahve')).toBeTruthy(); expect(screen.queryByText('Market geçmiş')).toBeNull(); expect(screen.getByText('1 sonuç')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: /İşlemi düzenle: İstanbul kahve/ }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/entry', params: { id: 'coffee' } });
+  await fireEvent.changeText(screen.getByLabelText('İşlemlerde ara'), 'missing');
+  expect(screen.getByText('Eşleşen işlem yok')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Filtreleri temizle' }));
+  expect(screen.getByText('Market geçmiş')).toBeTruthy(); expect(screen.getByLabelText('İşlemlerde ara').props.value).toBe('');
+  expect(api.voidRecord).not.toHaveBeenCalled();
+});
+test('advanced filters combine month account category with query and survive collapsing', async () => {
+  const { previous } = await mountSearchList();
+  expect(screen.queryByTestId('transactions-month')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Filtreler' }));
+  await fireEvent(screen.getByTestId('transactions-month'), 'valueChange', previous.slice(0, 7));
+  await fireEvent(screen.getByTestId('transactions-accountId'), 'valueChange', 'bank');
+  await fireEvent(screen.getByTestId('transactions-categoryId'), 'valueChange', 'default-general');
+  await fireEvent.changeText(screen.getByLabelText('İşlemlerde ara'), 'market');
+  expect(screen.getByText('Market geçmiş')).toBeTruthy(); expect(screen.queryByText('İstanbul kahve')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Filtreler' }));
+  expect(screen.queryByTestId('transactions-month')).toBeNull(); expect(screen.getByText('1 sonuç')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Filtreleri temizle' })); expect(screen.getByText('İstanbul kahve')).toBeTruthy();
+});
+test('switching transaction kind clears incompatible category and keeps remaining search filters', async () => {
+  await mountSearchList(); await fireEvent.press(screen.getByRole('button', { name: 'Filtreler' }));
+  await fireEvent(screen.getByTestId('transactions-categoryId'), 'valueChange', 'default-general');
+  await fireEvent.changeText(screen.getByLabelText('İşlemlerde ara'), 'market');
+  await fireEvent.press(screen.getByText('Gelir'));
+  expect(screen.getByTestId('transactions-categoryId').props.selectedValue).toBe('');
+  expect(screen.getByLabelText('İşlemlerde ara').props.value).toBe('market'); expect(screen.getByText('Eşleşen işlem yok')).toBeTruthy();
+});
+test('English dark transaction search distinguishes no results from empty ledger', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
+  const fake = fakeLedger(); await fake.api.post({ id: 'coffee', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 123456, currency: 'TRY' }, occurredOn: localDay(), note: 'Coffee', source: 'manual' });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><TransactionsScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Search transactions')).toBeTruthy());
+  await fireEvent.changeText(screen.getByLabelText('Search transactions'), '1,234.56'); expect(screen.getByText('Coffee')).toBeTruthy();
+  await fireEvent.changeText(screen.getByLabelText('Search transactions'), 'absent'); expect(screen.getByText('No matching transactions')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Clear filters' })); expect(screen.getByText('Coffee')).toBeTruthy();
+});
+
+test('transaction filters remain selected after refresh and react to edited record content', async () => {
+  const fake = fakeLedger();
+  const original = await fake.api.post({ id: 'coffee', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 1250, currency: 'TRY' }, occurredOn: localDay(), note: 'Coffee', source: 'manual' });
+  function RefreshProbe() { const { refresh } = useLedger(); return <Pressable accessibilityRole="button" accessibilityLabel="Refresh search" onPress={() => { void refresh(); }}><Text>Refresh search</Text></Pressable>; }
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><TransactionsScreen /><RefreshProbe /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('İşlemlerde ara')).toBeTruthy());
+  await fireEvent.changeText(screen.getByLabelText('İşlemlerde ara'), 'coffee');
+  await fireEvent.press(screen.getByText('Gider'));
+  await fake.api.update({ id: original.id, kind: 'expense', accountId: original.account_id, categoryId: 'default-general', amount: { minor: 1250, currency: 'TRY' }, occurredOn: original.occurred_on, note: 'Groceries', source: 'manual' }, original);
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh search' }));
+  await waitFor(() => expect(screen.getByText('Eşleşen işlem yok')).toBeTruthy());
+  expect(screen.getByLabelText('İşlemlerde ara').props.value).toBe('coffee');
+  await fireEvent.press(screen.getByRole('button', { name: 'Filtreleri temizle' }));
+  expect(screen.getByText('Groceries')).toBeTruthy();
+});
+
+test('template editor validates name and amount and retries metadata without posting a transaction', async () => {
+  const fake = fakeLedger(); fake.api.setTemplate.mockRejectedValueOnce(new Error('write'));
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><EntryScreen templateMode /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Şablon adı')).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' })); expect(fake.api.setTemplate).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Şablon adı'), ' Kahve ');
+  await fireEvent.changeText(screen.getByLabelText('Tutar'), '12,50');
+  expect(screen.queryByRole('button', { name: /^Tarih:/ })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Kayıt kaydedilemedi. Bilgilerin korunuyor; tekrar dene.')).toBeTruthy());
+  expect(screen.getByDisplayValue('12,50')).toBeTruthy();
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('Şablon kaydedildi')).toBeTruthy());
+  expect(fake.api.setTemplate).toHaveBeenCalledWith({ id: 'request-test', name: 'Kahve', kind: 'expense', account_id: 'default-cash', currency: 'TRY', minor: 1250, category_id: 'default-general', note: '' }, null);
+  expect(fake.api.setTemplate.mock.calls[0]).toEqual(fake.api.setTemplate.mock.calls[1]); expect(fake.api.post).not.toHaveBeenCalled();
+});
+async function templateFixture() {
+  const fake = fakeLedger(); const template: EntryTemplate = { id: 'coffee-template', name: 'Kahve', kind: 'expense', account_id: 'default-cash', currency: 'TRY', minor: 1250, category_id: 'default-general', note: 'Morning coffee' };
+  await fake.api.setTemplate(template); return { ...fake, template };
+}
+test('using a template fills today form with a fresh record id and keeps the preset unchanged', async () => {
+  const { api, open, template } = await templateFixture();
+  await render(<PreferencesProvider><LedgerProvider open={open}><EntryScreen templateId={template.id} /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByDisplayValue('12,50')).toBeTruthy());
+  expect(screen.getByDisplayValue('Morning coffee')).toBeTruthy(); expect(screen.getByRole('button', { name: `Tarih: ${localDay()}` })).toBeTruthy();
+  expect(api.post).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Tutar'), '15,00');
+  await fireEvent.press(screen.getByRole('button', { name: 'Kaydet' }));
+  await waitFor(() => expect(screen.getByText('İşlem kaydedildi')).toBeTruthy());
+  expect(api.post).toHaveBeenCalledWith(expect.objectContaining({ id: 'request-test', amount: { minor: 1500, currency: 'TRY' }, occurredOn: localDay(), source: 'manual' }));
+  expect((await api.snapshot()).templates![0].minor).toBe(1250);
+  expect(api.update).not.toHaveBeenCalled();
+});
+test('template list applies or edits and archived template is blocked without fallback account', async () => {
+  const { api, open, template } = await templateFixture(); const push = jest.fn();
+  jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  const list = await render(<PreferencesProvider><LedgerProvider open={open}><TemplatesScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Şablonu kullan: Kahve, 12,50 TRY' })).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: 'Şablonu kullan: Kahve, 12,50 TRY' }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/entry', params: { template: template.id } });
+  await fireEvent.press(screen.getByRole('button', { name: 'Şablonu düzenle: Kahve' }));
+  expect(push).toHaveBeenCalledWith({ pathname: '/template', params: { id: template.id } });
+  await list.unmount(); await api.setAccountArchived('default-cash', true);
+  const blocked = await render(<PreferencesProvider><LedgerProvider open={open}><EntryScreen templateId={template.id} /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu şablonun hesabı veya kategorisi arşivli. Kullanmak için şablonu düzelt veya ilgili öğeyi arşivden çıkar.')).toBeTruthy());
+  expect(screen.queryByLabelText('Tutar')).toBeNull(); expect(api.post).not.toHaveBeenCalled();
+  await blocked.unmount();
+  await render(<PreferencesProvider><LedgerProvider open={open}><EntryScreen templateId="missing" /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu şablon bulunamadı.')).toBeTruthy());
+});
+test('template removal needs confirmation and keeps the records created earlier', async () => {
+  const { api, open, template } = await templateFixture();
+  await api.post({ id: 'old-entry', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 1250, currency: 'TRY' }, occurredOn: localDay(), note: 'Coffee', source: 'manual' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    await render(<PreferencesProvider><LedgerProvider open={open}><EntryScreen templateMode templateId={template.id} /></LedgerProvider></PreferencesProvider>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Şablonu kaldır' })).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'Şablonu kaldır' }));
+    expect(api.removeTemplate).not.toHaveBeenCalled(); expect(alert.mock.calls[0][2]?.[0].style).toBe('cancel');
+    await act(async () => { alert.mock.calls[0][2]?.[1].onPress?.(); });
+    await waitFor(() => expect(screen.getByText('Şablon kaldırıldı')).toBeTruthy());
+    expect(api.removeTemplate).toHaveBeenCalledWith(template); expect((await api.snapshot()).records).toHaveLength(1);
+  } finally { alert.mockRestore(); }
+});
+test('English dark template save blocks duplicate taps and keeps committed success after refresh error', async () => {
+  jest.mocked(AsyncStorage.getItem).mockResolvedValue('{"language":"en","theme":"dark"}');
+  const fake = fakeLedger(); let release!: () => void; const pending = new Promise<void>(resolve => { release = resolve; }), save = fake.api.setTemplate.getMockImplementation()!;
+  fake.api.setTemplate.mockImplementationOnce(async input => { await pending; await save(input); });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><EntryScreen templateMode /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByLabelText('Template name')).toBeTruthy());
+  await fireEvent.changeText(screen.getByLabelText('Template name'), 'Salary'); await fireEvent.press(screen.getByText('Income'));
+  await fireEvent.changeText(screen.getByLabelText('Amount'), '1,000.50');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save' })); await fireEvent.press(screen.getByRole('button', { name: 'Saving…' }));
+  expect(fake.api.setTemplate).toHaveBeenCalledTimes(1); fake.api.snapshot.mockRejectedValueOnce(new Error('read'));
+  await act(async () => { release(); });
+  await waitFor(() => expect(screen.getByText('Template saved')).toBeTruthy());
+  expect(fake.api.setTemplate).toHaveBeenCalledWith(expect.objectContaining({ kind: 'income', minor: 100050, category_id: 'default-salary' }), null);
 });
 
 test('valid expense saves exact amount and undo removes it', async () => {
@@ -535,7 +1072,7 @@ test('transfer delete is confirmed, keeps the draft on failure and removes the r
   try {
     await fireEvent.press(screen.getByRole('button', { name: 'İşlemi sil' }));
     expect(api.voidRecord).not.toHaveBeenCalled();
-    expect(alert.mock.calls[0][1]).toBe('Bu transferin iki hesap üzerindeki etkisi birlikte kaldırılacak. Bu silme işlemi geri alınamaz.');
+    expect(alert.mock.calls[0][1]).toBe('Bu transferin iki hesap üzerindeki etkisi ve varsa bağlı komisyon gideri birlikte kaldırılacak. Bu silme işlemi geri alınamaz.');
     expect(alert.mock.calls[0][2]?.[0].style).toBe('cancel');
     api.voidRecord.mockRejectedValueOnce(new Error('failed'));
     await act(async () => { alert.mock.calls[0][2]?.[1].onPress?.(); });

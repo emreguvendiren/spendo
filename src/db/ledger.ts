@@ -3,8 +3,13 @@ import { Connection, Database } from './connection';
 
 export type Account = { id: string; name: string; kind: 'cash' | 'bank' | 'credit' | 'other'; currency: Currency; archived?: number };
 export type Category = { id: string; name: string; kind: 'income' | 'expense'; archived?: number };
-export type LedgerSnapshot = { accounts: Account[]; categories: Category[]; records: RecordRow[]; feeLinks?: { transfer_id: string; fee_id: string }[] };
-export type TransferFeeInput = Extract<RecordInput, { kind: 'income' | 'expense' }>;
+export type Budget = { month: string; currency: Currency; category_id: string; minor: number };
+export type EntryTemplate = { id: string; name: string; kind: 'income' | 'expense'; account_id: string; currency: Currency; minor: number; category_id: string; note: string; deleted?: number };
+export type Goal = { id: string; name: string; currency: Currency; target_minor: number; deleted?: number };
+export type Contribution = { id: string; goal_id: string; minor: number; occurred_on: string; created_at: string; voided: number };
+export type ContributionInput = { id: string; goalId: string; amount: Money; day: string };
+export type LedgerSnapshot = { accounts: Account[]; categories: Category[]; records: RecordRow[]; feeLinks?: { transfer_id: string; fee_id: string }[]; budgets?: Budget[]; goals?: Goal[]; contributions?: Contribution[]; templates?: EntryTemplate[] };
+export type TransferFeeInput = Extract<RecordInput, { kind: 'income' | 'expense' }> & { kind: 'expense' };
 type Common = { id: string; accountId: string; amount: Money; occurredOn: string; note: string; source: 'manual' | 'import' | 'recurring' | 'assistant' };
 export type RecordInput = Common & (
   | { kind: 'income' | 'expense'; categoryId: string }
@@ -48,6 +53,7 @@ export function validateDay(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new LedgerError('invalid');
 }
+export function validateMonth(value: string) { validateDay(`${value}-01`); }
 
 function fields(input: RecordInput) {
   id(input.id); id(input.accountId); validateDay(input.occurredOn);
@@ -72,6 +78,22 @@ function fields(input: RecordInput) {
     target_minor: input.kind === 'transfer' ? input.targetAmount.minor : null,
     occurred_on: input.occurredOn, note: input.note, source: input.source,
   };
+}
+
+function goalFields(goal: Goal) {
+  id(goal.id); name(goal.name); money(goal.target_minor, goal.currency);
+  if (goal.target_minor <= 0 || goal.deleted) throw new LedgerError('invalid');
+}
+function templateFields(template: EntryTemplate) {
+  name(template.name);
+  if (template.deleted || !['income', 'expense'].includes(template.kind)) throw new LedgerError('invalid');
+  return fields({ id: template.id, kind: template.kind, accountId: template.account_id, amount: money(template.minor, template.currency), categoryId: template.category_id, note: template.note, occurredOn: '2000-01-01', source: 'manual' });
+}
+const templateKeys = ['id', 'name', 'kind', 'account_id', 'currency', 'minor', 'category_id', 'note'] as const;
+function sameTemplate(left: EntryTemplate, right: EntryTemplate) { return templateKeys.every(key => left[key] === right[key]); }
+async function goalBalance(tx: Connection, goal: Goal) {
+  const rows = await tx.getAllAsync<Contribution>('SELECT * FROM goal_contributions WHERE goal_id = ? AND voided = 0', [goal.id]);
+  return sumMoney(rows.map(row => money(row.minor, goal.currency)), goal.currency);
 }
 
 async function balance(tx: Connection, accountId: string): Promise<Money> {
@@ -127,11 +149,110 @@ export class Ledger {
       categories: await tx.getAllAsync<Category>('SELECT * FROM categories ORDER BY id', []),
       records: await tx.getAllAsync<RecordRow>('SELECT * FROM records WHERE voided = 0 ORDER BY occurred_on DESC, created_at DESC, id', []),
       feeLinks: await tx.getAllAsync<{ transfer_id: string; fee_id: string }>('SELECT l.* FROM transfer_fees l JOIN records f ON f.id = l.fee_id WHERE f.voided = 0', []),
+      budgets: await tx.getAllAsync<Budget>('SELECT month,currency,category_id,minor FROM budgets ORDER BY month DESC, category_id, currency', []),
+      goals: await tx.getAllAsync<Goal>('SELECT * FROM goals WHERE deleted = 0 ORDER BY name,id', []),
+      contributions: await tx.getAllAsync<Contribution>('SELECT c.* FROM goal_contributions c JOIN goals g ON g.id = c.goal_id WHERE c.voided = 0 AND g.deleted = 0 ORDER BY occurred_on DESC,created_at DESC,c.id', []),
+      templates: await tx.getAllAsync<EntryTemplate>('SELECT * FROM entry_templates WHERE deleted = 0 ORDER BY name,id', []),
     }));
   }
 
+  async setTemplate(input: EntryTemplate, expected: EntryTemplate | null): Promise<void> {
+    const row = templateFields(input);
+    if (expected && input.id !== expected.id) throw new LedgerError('invalid');
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<EntryTemplate>('SELECT * FROM entry_templates WHERE id = ?', [input.id]);
+      if (current?.deleted) throw new LedgerError('missing');
+      if (current && sameTemplate(current, input)) return;
+      if (expected ? !current || !sameTemplate(current, expected) : !!current) throw new LedgerError('conflict');
+      const previous = current ? { ...templateFields(current), created_at: '', voided: 0 } : undefined;
+      await ensureActiveReferences(tx, row, previous);
+      if (current) await tx.runAsync('UPDATE entry_templates SET name = ?, kind = ?, account_id = ?, currency = ?, minor = ?, category_id = ?, note = ? WHERE id = ?', [input.name, input.kind, input.account_id, input.currency, input.minor, input.category_id, input.note, input.id]);
+      else await tx.runAsync('INSERT INTO entry_templates(id,name,kind,account_id,currency,minor,category_id,note) VALUES (?,?,?,?,?,?,?,?)', [input.id, input.name, input.kind, input.account_id, input.currency, input.minor, input.category_id, input.note]);
+    });
+  }
+  async removeTemplate(expected: EntryTemplate): Promise<void> {
+    templateFields({ ...expected, deleted: 0 });
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<EntryTemplate>('SELECT * FROM entry_templates WHERE id = ?', [expected.id]);
+      if (!current || current.deleted) return;
+      if (!sameTemplate(current, expected)) throw new LedgerError('conflict');
+      await tx.runAsync('UPDATE entry_templates SET deleted = 1 WHERE id = ?', [expected.id]);
+    });
+  }
+
+  async setGoal(input: Goal, expected: Goal | null): Promise<void> {
+    goalFields(input);
+    if (expected && (input.id !== expected.id || input.currency !== expected.currency)) throw new LedgerError('invalid');
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<Goal>('SELECT * FROM goals WHERE id = ?', [input.id]);
+      if (current?.deleted) throw new LedgerError('missing');
+      if (current && current.name === input.name && current.currency === input.currency && current.target_minor === input.target_minor) return;
+      if (expected ? !current || current.name !== expected.name || current.target_minor !== expected.target_minor || current.currency !== expected.currency : !!current) throw new LedgerError('conflict');
+      if (current) await tx.runAsync('UPDATE goals SET name = ?, target_minor = ? WHERE id = ?', [input.name, input.target_minor, input.id]);
+      else await tx.runAsync('INSERT INTO goals(id,name,currency,target_minor) VALUES (?,?,?,?)', [input.id, input.name, input.currency, input.target_minor]);
+    });
+  }
+  async removeGoal(expected: Goal): Promise<void> {
+    goalFields({ ...expected, deleted: 0 });
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<Goal>('SELECT * FROM goals WHERE id = ?', [expected.id]);
+      if (!current || current.deleted) return;
+      if (current.name !== expected.name || current.target_minor !== expected.target_minor || current.currency !== expected.currency) throw new LedgerError('conflict');
+      await tx.runAsync('UPDATE goals SET deleted = 1 WHERE id = ?', [expected.id]);
+    });
+  }
+  async addContribution(input: ContributionInput): Promise<void> {
+    id(input.id); id(input.goalId); validateDay(input.day); money(input.amount.minor, input.amount.currency);
+    if (input.amount.minor <= 0) throw new LedgerError('invalid');
+    await this.run(async tx => {
+      const [goal] = await tx.getAllAsync<Goal>('SELECT * FROM goals WHERE id = ?', [input.goalId]);
+      if (!goal || goal.deleted) throw new LedgerError('missing');
+      if (goal.currency !== input.amount.currency) throw new LedgerError('invalid');
+      const [current] = await tx.getAllAsync<Contribution>('SELECT * FROM goal_contributions WHERE id = ?', [input.id]);
+      if (current) {
+        if (current.goal_id !== input.goalId || current.minor !== input.amount.minor || current.occurred_on !== input.day) throw new LedgerError('conflict');
+        return;
+      }
+      await tx.runAsync('INSERT INTO goal_contributions(id,goal_id,minor,occurred_on,created_at) VALUES (?,?,?,?,?)', [input.id, input.goalId, input.amount.minor, input.day, this.now()]);
+      await goalBalance(tx, goal);
+    });
+  }
+  async removeContribution(expected: Contribution): Promise<void> {
+    id(expected.id);
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<Contribution>('SELECT * FROM goal_contributions WHERE id = ?', [expected.id]);
+      if (!current || current.voided) return;
+      if (Object.keys(current).some(key => current[key as keyof Contribution] !== expected[key as keyof Contribution])) throw new LedgerError('conflict');
+      await tx.runAsync('UPDATE goal_contributions SET voided = 1 WHERE id = ?', [expected.id]);
+    });
+  }
+
+  async setBudget(input: Budget, expected: Budget | null): Promise<void> {
+    validateMonth(input.month); id(input.category_id); money(input.minor, input.currency);
+    if (input.minor <= 0 || (expected && (expected.month !== input.month || expected.currency !== input.currency || expected.category_id !== input.category_id))) throw new LedgerError('invalid');
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<Budget>('SELECT month,currency,category_id,minor FROM budgets WHERE month = ? AND currency = ? AND category_id = ?', [input.month, input.currency, input.category_id]);
+      if (current?.minor === input.minor) return;
+      if (expected ? !current || current.minor !== expected.minor : !!current) throw new LedgerError('conflict');
+      const [category] = await tx.getAllAsync<Category>('SELECT * FROM categories WHERE id = ?', [input.category_id]);
+      if (!category || category.kind !== 'expense') throw new LedgerError('invalid');
+      if (category.archived && !current) throw new LedgerError('archived');
+      if (current) await tx.runAsync('UPDATE budgets SET minor = ? WHERE month = ? AND currency = ? AND category_id = ?', [input.minor, input.month, input.currency, input.category_id]);
+      else await tx.runAsync('INSERT INTO budgets(month,currency,category_id,minor) VALUES (?,?,?,?)', [input.month, input.currency, input.category_id, input.minor]);
+    });
+  }
+  async removeBudget(expected: Budget): Promise<void> {
+    validateMonth(expected.month); id(expected.category_id); money(expected.minor, expected.currency);
+    await this.run(async tx => {
+      const [current] = await tx.getAllAsync<Budget>('SELECT month,currency,category_id,minor FROM budgets WHERE month = ? AND currency = ? AND category_id = ?', [expected.month, expected.currency, expected.category_id]);
+      if (!current) return;
+      if (current.minor !== expected.minor) throw new LedgerError('conflict');
+      await tx.runAsync('DELETE FROM budgets WHERE month = ? AND currency = ? AND category_id = ?', [expected.month, expected.currency, expected.category_id]);
+    });
+  }
+
   /** Called only for the separate development DB. Seed once, preserving edits/deletions on reload. */
-  async seedDevelopment(data: { accounts: Account[]; records: RecordInput[] }, version = 1): Promise<void> {
+  async seedDevelopment(data: { accounts: Account[]; records: RecordInput[]; budgets?: Budget[]; goals?: Goal[]; contributions?: ContributionInput[]; templates?: EntryTemplate[] }, version = 1): Promise<void> {
     if (!Number.isSafeInteger(version) || version < 1) throw new LedgerError('invalid');
     await this.run(async tx => {
       await tx.execAsync('CREATE TABLE IF NOT EXISTS development_seed (version INTEGER PRIMARY KEY) STRICT;');
@@ -143,6 +264,29 @@ export class Ledger {
         await tx.runAsync('INSERT INTO accounts(id,name,kind,currency) VALUES (?,?,?,?)', [account.id, account.name, account.kind, account.currency]);
       }
       for (const input of data.records) await insertRecord(tx, fields(input), this.now(), false);
+      for (const budget of data.budgets ?? []) {
+        validateMonth(budget.month); id(budget.category_id); money(budget.minor, budget.currency);
+        if (budget.minor <= 0) throw new LedgerError('invalid');
+        // Preserve user-created limits and do not activate archived categories while seeding.
+        await tx.runAsync("INSERT INTO budgets(month,currency,category_id,minor) SELECT ?,?,?,? FROM categories WHERE id = ? AND kind = 'expense' AND archived = 0 ON CONFLICT(month,currency,category_id) DO NOTHING", [budget.month, budget.currency, budget.category_id, budget.minor, budget.category_id]);
+      }
+      for (const goal of data.goals ?? []) {
+        goalFields(goal);
+        await tx.runAsync('INSERT INTO goals(id,name,currency,target_minor) VALUES (?,?,?,?) ON CONFLICT(id) DO NOTHING', [goal.id, goal.name, goal.currency, goal.target_minor]);
+      }
+      for (const input of data.contributions ?? []) {
+        id(input.id); id(input.goalId); validateDay(input.day); money(input.amount.minor, input.amount.currency);
+        if (input.amount.minor <= 0) throw new LedgerError('invalid');
+        const [goal] = await tx.getAllAsync<Goal>('SELECT * FROM goals WHERE id = ?', [input.goalId]);
+        if (!goal || goal.deleted) continue;
+        if (goal.currency !== input.amount.currency) throw new LedgerError('invalid');
+        await tx.runAsync('INSERT INTO goal_contributions(id,goal_id,minor,occurred_on,created_at) VALUES (?,?,?,?,?) ON CONFLICT(id) DO NOTHING', [input.id, input.goalId, input.amount.minor, input.day, this.now()]);
+        await goalBalance(tx, goal);
+      }
+      for (const template of data.templates ?? []) {
+        templateFields(template);
+        await tx.runAsync('INSERT INTO entry_templates(id,name,kind,account_id,currency,minor,category_id,note) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING', [template.id, template.name, template.kind, template.account_id, template.currency, template.minor, template.category_id, template.note]);
+      }
       await tx.runAsync('INSERT INTO development_seed(version) VALUES (?)', [version]);
     });
   }
@@ -322,14 +466,58 @@ export class Ledger {
     });
   }
 
-  async voidRecord(recordId: string, expected?: RecordRow): Promise<void> {
+  /** Transfer and its optional fee are compared and committed as one financial change. */
+  async writeTransfer(input: Extract<RecordInput, { kind: 'transfer' }>, fee: TransferFeeInput | null, expected?: RecordRow, expectedFee: RecordRow | null = null): Promise<RecordRow> {
+    const row = fields(input);
+    const feeRow = fee ? fields(fee) : null;
+    if (row.kind !== 'transfer' || (expected && (expected.kind !== 'transfer' || expected.id !== row.id || expected.source !== row.source))) throw new LedgerError('invalid');
+    if (feeRow && (feeRow.kind !== 'expense' || feeRow.id === row.id || feeRow.account_id !== row.account_id || feeRow.currency !== row.currency || feeRow.occurred_on !== row.occurred_on || feeRow.source !== row.source)) throw new LedgerError('invalid');
+    const same = (saved: RecordRow, desired: ReturnType<typeof fields>) => Object.entries(desired).every(([key, value]) => saved[key as keyof RecordRow] === value);
+    const unchanged = (saved: RecordRow, opened: RecordRow) => Object.keys(saved).every(key => saved[key as keyof RecordRow] === opened[key as keyof RecordRow]);
+    return this.run(async tx => {
+      const [current] = await tx.getAllAsync<RecordRow>('SELECT * FROM records WHERE id = ?', [row.id]);
+      const [currentFee] = await tx.getAllAsync<RecordRow>('SELECT f.* FROM records f JOIN transfer_fees l ON l.fee_id = f.id WHERE l.transfer_id = ? AND f.voided = 0', [row.id]);
+      if (current?.voided) throw new LedgerError('missing');
+      if (current && same(current, row) && (feeRow ? currentFee && same(currentFee, feeRow) : !currentFee)) return current;
+      if (expected) {
+        if (!current) throw new LedgerError('missing');
+        if (!unchanged(current, expected) || (currentFee ? !expectedFee || !unchanged(currentFee, expectedFee) : !!expectedFee)) throw new LedgerError('conflict');
+      } else if (current || currentFee) throw new LedgerError('conflict');
+      if (currentFee && feeRow && currentFee.id !== feeRow.id) throw new LedgerError('invalid');
+      await ensureActiveReferences(tx, row, current);
+      if (feeRow) {
+        // Existing archived source stays valid even when adding the first fee to its old transfer.
+        await ensureActiveReferences(tx, feeRow, currentFee ?? (current ? { ...current, category_id: null } : undefined));
+        if (!currentFee && (await tx.getAllAsync('SELECT id FROM records WHERE id = ?', [feeRow.id])).length) throw new LedgerError('conflict');
+      }
+      if (current) {
+        await tx.runAsync('UPDATE records SET account_id = ?, currency = ?, minor = ?, target_id = ?, target_currency = ?, target_minor = ?, occurred_on = ?, note = ? WHERE id = ?', [row.account_id, row.currency, row.minor, row.target_id, row.target_currency, row.target_minor, row.occurred_on, row.note, row.id]);
+      } else await insertRecord(tx, row, this.now(), false, false);
+      if (currentFee && feeRow) {
+        await tx.runAsync('UPDATE records SET account_id = ?, currency = ?, minor = ?, category_id = ?, occurred_on = ?, note = ? WHERE id = ?', [feeRow.account_id, feeRow.currency, feeRow.minor, feeRow.category_id, feeRow.occurred_on, feeRow.note, feeRow.id]);
+      } else if (currentFee) await tx.runAsync('UPDATE records SET voided = 1 WHERE id = ?', [currentFee.id]);
+      else if (feeRow) {
+        await insertRecord(tx, feeRow, this.now(), false, false);
+        await tx.runAsync('INSERT INTO transfer_fees(fee_id,transfer_id) VALUES (?,?)', [feeRow.id, row.id]);
+      }
+      for (const accountId of new Set([current?.account_id, current?.target_id, currentFee?.account_id, row.account_id, row.target_id])) if (accountId) await balance(tx, accountId);
+      const [saved] = await tx.getAllAsync<RecordRow>('SELECT * FROM records WHERE id = ?', [row.id]);
+      return saved;
+    });
+  }
+
+  async voidRecord(recordId: string, expected?: RecordRow, expectedFee?: RecordRow | null): Promise<void> {
     id(recordId);
     await this.run(async tx => {
       const [row] = await tx.getAllAsync<RecordRow>('SELECT * FROM records WHERE id = ?', [recordId]);
       if (!row) throw new LedgerError('missing');
       if (row.voided) return;
+      if ((await tx.getAllAsync('SELECT fee_id FROM transfer_fees WHERE fee_id = ?', [row.id])).length) throw new LedgerError('conflict');
       if (expected && Object.keys(row).some(key => row[key as keyof RecordRow] !== expected[key as keyof RecordRow])) throw new LedgerError('conflict');
+      const [fee] = await tx.getAllAsync<RecordRow>('SELECT f.* FROM records f JOIN transfer_fees l ON l.fee_id = f.id WHERE l.transfer_id = ? AND f.voided = 0', [row.id]);
+      if (expected && (fee ? !expectedFee || Object.keys(fee).some(key => fee[key as keyof RecordRow] !== expectedFee[key as keyof RecordRow]) : !!expectedFee)) throw new LedgerError('conflict');
       await tx.runAsync('UPDATE records SET voided = 1 WHERE id = ?', [recordId]);
+      if (fee) await tx.runAsync('UPDATE records SET voided = 1 WHERE id = ?', [fee.id]);
       await balance(tx, row.account_id);
       if (row.target_id) await balance(tx, row.target_id);
     });

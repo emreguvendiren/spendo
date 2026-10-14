@@ -52,7 +52,7 @@ CREATE INDEX records_target ON records(target_id) WHERE target_id IS NOT NULL;
 export async function migrate(db: Database): Promise<void> {
   await db.transaction(async tx => {
     const [version] = await tx.getAllAsync<{ user_version: number }>('PRAGMA user_version', []);
-    if (!version || version.user_version > 3 || version.user_version < 0) throw new Error('database.version');
+    if (!version || version.user_version > 6 || version.user_version < 0) throw new Error('database.version');
     if (version.user_version === 0) {
       await tx.execAsync(schema);
       await tx.execAsync('PRAGMA user_version = 1');
@@ -81,6 +81,53 @@ export async function migrate(db: Database): Promise<void> {
         ) THEN RAISE(ABORT, 'duplicate transfer fee') END;
       END;`);
       await tx.execAsync('PRAGMA user_version = 3');
+    }
+    if (version.user_version <= 3) {
+      await tx.execAsync(`CREATE TABLE budgets (
+        month TEXT NOT NULL CHECK(length(month) = 7 AND month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' AND substr(month,1,4) <> '0000' AND substr(month,6,2) BETWEEN '01' AND '12'),
+        currency TEXT NOT NULL CHECK(currency IN ('TRY','USD','EUR','GBP','JPY','KWD')),
+        category_id TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'expense' CHECK(kind = 'expense'),
+        minor INTEGER NOT NULL CHECK(minor BETWEEN 1 AND 9007199254740991),
+        PRIMARY KEY(month,currency,category_id),
+        FOREIGN KEY(category_id,kind) REFERENCES categories(id,kind)
+      ) STRICT;`);
+      await tx.execAsync('PRAGMA user_version = 4');
+    }
+    if (version.user_version <= 4) {
+      await tx.execAsync(`CREATE TABLE goals (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 80),
+        currency TEXT NOT NULL CHECK(currency IN ('TRY','USD','EUR','GBP','JPY','KWD')),
+        target_minor INTEGER NOT NULL CHECK(target_minor BETWEEN 1 AND 9007199254740991),
+        deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))
+      ) STRICT;
+      CREATE TABLE goal_contributions (
+        id TEXT PRIMARY KEY NOT NULL,
+        goal_id TEXT NOT NULL REFERENCES goals(id),
+        minor INTEGER NOT NULL CHECK(minor BETWEEN 1 AND 9007199254740991),
+        occurred_on TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        voided INTEGER NOT NULL DEFAULT 0 CHECK(voided IN (0,1))
+      ) STRICT;
+      CREATE INDEX contributions_goal ON goal_contributions(goal_id);`);
+      await tx.execAsync('PRAGMA user_version = 5');
+    }
+    if (version.user_version <= 5) {
+      await tx.execAsync(`CREATE TABLE entry_templates (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 80),
+        kind TEXT NOT NULL CHECK(kind IN ('income','expense')),
+        account_id TEXT NOT NULL,
+        currency TEXT NOT NULL,
+        minor INTEGER NOT NULL CHECK(minor BETWEEN 1 AND 9007199254740991),
+        category_id TEXT NOT NULL,
+        note TEXT NOT NULL CHECK(length(note) <= 500),
+        deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1)),
+        FOREIGN KEY(account_id,currency) REFERENCES accounts(id,currency),
+        FOREIGN KEY(category_id,kind) REFERENCES categories(id,kind)
+      ) STRICT;`);
+      await tx.execAsync('PRAGMA user_version = 6');
     }
   });
 }

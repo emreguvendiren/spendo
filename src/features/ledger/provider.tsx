@@ -1,14 +1,18 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { Account, Category, Ledger, LedgerSnapshot, RecordInput, RecordRow } from '@/db/ledger';
+import { Account, Budget, EntryTemplate, Goal, Contribution, ContributionInput, Category, Ledger, LedgerSnapshot, RecordInput, RecordRow, TransferFeeInput } from '@/db/ledger';
 import { Money } from '@/domain/money';
 import { openLedger } from '@/db/open';
 
 type State = { snapshot: LedgerSnapshot | null; loading: boolean; error: boolean; lastSaved: string | null };
 type ArchiveActions = { archiveAccount: (account: Account, archived: boolean) => Promise<void>; archiveCategory: (category: Category, archived: boolean) => Promise<void> };
-type Context = State & { refresh: () => Promise<void>; save: (input: RecordInput) => Promise<RecordRow>; update: (input: RecordInput, expected: RecordRow) => Promise<RecordRow>; remove: (expected: RecordRow) => Promise<void>; undo: () => Promise<void>; createAccount: (account: Account, opening: Money, day: string) => Promise<void>; renameAccount: (account: Account, name: string) => Promise<void>; createCategory: (category: Category) => Promise<void>; renameCategory: (category: Category, name: string) => Promise<void> };
+type Context = State & { refresh: () => Promise<void>; save: (input: RecordInput) => Promise<RecordRow>; update: (input: RecordInput, expected: RecordRow) => Promise<RecordRow>; remove: (expected: RecordRow, expectedFee?: RecordRow | null) => Promise<void>; undo: () => Promise<void>; createAccount: (account: Account, opening: Money, day: string) => Promise<void>; renameAccount: (account: Account, name: string) => Promise<void>; createCategory: (category: Category) => Promise<void>; renameCategory: (category: Category, name: string) => Promise<void> };
 type OpeningActions = { setOpening: (input: Extract<RecordInput, { kind: 'opening' }>, expected: RecordRow | null) => Promise<RecordRow> };
-const LedgerContext = createContext<(Context & ArchiveActions & OpeningActions) | null>(null);
+type TransferActions = { saveTransfer: (input: Extract<RecordInput, { kind: 'transfer' }>, fee: TransferFeeInput | null, expected?: RecordRow, expectedFee?: RecordRow | null) => Promise<RecordRow> };
+type BudgetActions = { saveBudget: (input: Budget, expected: Budget | null) => Promise<void>; removeBudget: (expected: Budget) => Promise<void> };
+type GoalActions = { saveGoal: (input: Goal, expected: Goal | null) => Promise<void>; removeGoal: (expected: Goal) => Promise<void>; addContribution: (input: ContributionInput) => Promise<void>; removeContribution: (expected: Contribution) => Promise<void> };
+type TemplateActions = { saveTemplate: (input: EntryTemplate, expected: EntryTemplate | null) => Promise<void>; removeTemplate: (expected: EntryTemplate) => Promise<void> };
+const LedgerContext = createContext<(Context & ArchiveActions & OpeningActions & TransferActions & BudgetActions & GoalActions & TemplateActions) | null>(null);
 export function LedgerProvider({ children, open = openLedger }: PropsWithChildren<{ open?: () => Promise<Ledger> }>) {
   const [state, setState] = useState<State>({ snapshot: null, loading: true, error: false, lastSaved: null });
   const ledger = useRef<Ledger | null>(null);
@@ -92,9 +96,19 @@ export function LedgerProvider({ children, open = openLedger }: PropsWithChildre
     }
     return result;
   }
-  async function remove(expected: RecordRow) {
+  async function saveTransfer(input: Extract<RecordInput, { kind: 'transfer' }>, fee: TransferFeeInput | null, expected?: RecordRow, expectedFee?: RecordRow | null) {
     if (!ledger.current) throw new Error('ledger.unavailable');
-    await ledger.current.voidRecord(expected.id, expected);
+    const result = await ledger.current.writeTransfer(input, fee, expected, expectedFee);
+    if (alive.current) {
+      setState(previous => ({ ...previous, lastSaved: expected ? previous.lastSaved === result.id ? null : previous.lastSaved : result.id }));
+      await refresh();
+    }
+    return result;
+  }
+  async function remove(expected: RecordRow, expectedFee?: RecordRow | null) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    if (expectedFee === undefined) await ledger.current.voidRecord(expected.id, expected);
+    else await ledger.current.voidRecord(expected.id, expected, expectedFee);
     if (alive.current) {
       setState(previous => ({ ...previous, lastSaved: previous.lastSaved === expected.id ? null : previous.lastSaved }));
       await refresh();
@@ -120,6 +134,46 @@ export function LedgerProvider({ children, open = openLedger }: PropsWithChildre
     await ledger.current.renameCategory(category.id, name, category.name);
     if (alive.current) await refresh();
   }
+  async function saveTemplate(input: EntryTemplate, expected: EntryTemplate | null) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.setTemplate(input, expected);
+    if (alive.current) await refresh();
+  }
+  async function removeTemplate(expected: EntryTemplate) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.removeTemplate(expected);
+    if (alive.current) await refresh();
+  }
+  async function saveGoal(input: Goal, expected: Goal | null) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.setGoal(input, expected);
+    if (alive.current) await refresh();
+  }
+  async function removeGoal(expected: Goal) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.removeGoal(expected);
+    if (alive.current) await refresh();
+  }
+  async function addContribution(input: ContributionInput) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.addContribution(input);
+    if (alive.current) await refresh();
+  }
+  async function removeContribution(expected: Contribution) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.removeContribution(expected);
+    if (alive.current) await refresh();
+  }
+  async function saveBudget(input: Budget, expected: Budget | null) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.setBudget(input, expected);
+    if (alive.current) await refresh();
+  }
+  async function removeBudget(expected: Budget) {
+    if (!ledger.current) throw new Error('ledger.unavailable');
+    await ledger.current.removeBudget(expected);
+    if (alive.current) await refresh();
+  }
   async function archiveAccount(account: Account, archived: boolean) {
     if (!ledger.current) throw new Error('ledger.unavailable');
     await ledger.current.setAccountArchived(account.id, archived);
@@ -130,7 +184,7 @@ export function LedgerProvider({ children, open = openLedger }: PropsWithChildre
     await ledger.current.setCategoryArchived(category.id, archived);
     if (alive.current) await refresh();
   }
-  return <LedgerContext.Provider value={{ ...state, refresh, save, update, remove, undo, createAccount, renameAccount, createCategory, renameCategory, archiveAccount, archiveCategory, setOpening }}>{children}</LedgerContext.Provider>;
+  return <LedgerContext.Provider value={{ ...state, refresh, save, update, remove, undo, createAccount, renameAccount, createCategory, renameCategory, archiveAccount, archiveCategory, setOpening, saveTransfer, saveBudget, removeBudget, saveGoal, removeGoal, addContribution, removeContribution, saveTemplate, removeTemplate }}>{children}</LedgerContext.Provider>;
 }
 export function useLedger() {
   const context = useContext(LedgerContext);

@@ -7,6 +7,7 @@
 4. Onaylanmış ürün kararlarını tekrar sorma. Eksik rutin teknik kararları gerekçeleriyle al ve kaydet.
 
 ## Değişmez kurallar
+- Güncel ürün önceliği (14 Ekim 2026): önce ana fonksiyonlar — raporlar, bütçe/hedef ve günlük kullanım akışları. Komisyon/havale/iade ayrıntılarını kullanıcı yeniden öncelik vermeden geliştirmeye devam etme. Önceki detay planlarını otomatik sıradaki iş sayma.
 - React Native + Expo + TypeScript; Android ve iOS. Uygulama adı Spendo, kaynak logo kökteki `logo.png`.
 - Her geliştirmede davranışa uygun test yaz/güncelle, ilgili testleri ve tip/lint kontrollerini çalıştır. Geçmeden sonraki özelliğe ilerleme. Çalıştırılamayan kontrolü başarılı diye raporlama.
 - Yerel veriler, para hesaplamaları, tekrarlayan işlemler ve veritabanı geçişleri öncelikli doğruluk alanlarıdır.

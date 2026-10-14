@@ -15,8 +15,8 @@ import { layout, spacing } from '@/theme/tokens';
 import { usePreferences } from '@/features/preferences/provider';
 import { useLedger } from './provider';
 import { DemoNotice, LedgerStatus } from './status';
-import { defaultAccount, entityName, localDay } from './model';
-import { transferInput, TransferError } from './transfer-model';
+import { defaultAccount, defaultCategory, entityName, localDay } from './model';
+import { transferInput, transferFeeInput, TransferError } from './transfer-model';
 
 export default function TransferScreen({ recordId }: { recordId?: string } = {}) {
   const { snapshot } = useLedger();
@@ -35,12 +35,19 @@ function LoadedTransfer({ recordId }: { recordId: string }) {
   return <TransferForm initial={initial} />;
 }
 function TransferForm({ initial }: { initial?: RecordRow }) {
-  const { snapshot, save, update, remove } = useLedger();
+  const { snapshot, save, update, remove, saveTransfer } = useLedger();
   const { t, colors, isDark, preferences } = usePreferences();
   const router = useRouter();
   const navigation = useNavigation();
   const headerHeight = useHeaderHeight();
   const [original] = useState(initial);
+  const [originalFee] = useState(() => {
+    const link = snapshot!.feeLinks?.find(item => item.transfer_id === initial?.id);
+    return snapshot!.records.find(row => row.id === link?.fee_id);
+  });
+  const [feeId] = useState(() => originalFee?.id ?? `fee-${randomUUID()}`);
+  const [feeAmount, setFeeAmount] = useState(() => originalFee ? amountText(money(originalFee.minor, originalFee.currency), preferences.language) : '');
+  const [feeCategory, setFeeCategory] = useState(() => originalFee?.category_id ?? defaultCategory(snapshot!, 'expense'));
   const [id] = useState(() => initial?.id ?? randomUUID());
   const [sourceId, setSourceId] = useState(() => initial?.account_id ?? defaultAccount(snapshot!));
   const [targetId, setTargetId] = useState(() => initial?.target_id ?? snapshot!.accounts.find(account => account.id !== sourceId && !account.archived)!.id);
@@ -53,7 +60,7 @@ function TransferForm({ initial }: { initial?: RecordRow }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [deleted, setDeleted] = useState(false);
-  const [error, setError] = useState<'accounts' | 'amount' | 'save' | 'delete' | 'conflict' | null>(null);
+  const [error, setError] = useState<'accounts' | 'amount' | 'fee' | 'save' | 'delete' | 'conflict' | null>(null);
   const lock = useRef(false);
   const source = snapshot!.accounts.find(account => account.id === sourceId);
   const target = snapshot!.accounts.find(account => account.id === targetId);
@@ -67,15 +74,18 @@ function TransferForm({ initial }: { initial?: RecordRow }) {
     let input;
     try { input = transferInput({ id, sourceId, targetId, amount, targetAmount, date, note }, snapshot!.accounts, preferences.language, original); }
     catch (failure) { setError(failure instanceof TransferError ? 'accounts' : failure instanceof MoneyError ? 'amount' : 'save'); return; }
+    let fee;
+    try { fee = transferFeeInput(feeAmount, feeId, feeCategory, snapshot!.categories, input, preferences.language, originalFee); }
+    catch { setError('fee'); return; }
     lock.current = true; setBusy(true); setError(null); Keyboard.dismiss();
-    try { if (original) await update(input, original); else await save(input); setDone(true); }
+    try { if (fee || originalFee) await saveTransfer(input, fee, original, originalFee ?? null); else if (original) await update(input, original); else await save(input); setDone(true); }
     catch (failure) { setError(failure instanceof LedgerError && (failure.code === 'conflict' || failure.code === 'missing') ? 'conflict' : 'save'); }
     finally { lock.current = false; setBusy(false); }
   }
   async function deleteTransfer() {
     if (lock.current || !original) return;
     lock.current = true; setBusy(true); setError(null);
-    try { await remove(original); setDeleted(true); setDone(true); }
+    try { if (originalFee) await remove(original, originalFee); else await remove(original); setDeleted(true); setDone(true); }
     catch (failure) { setError(failure instanceof LedgerError && failure.code === 'conflict' ? 'conflict' : 'delete'); }
     finally { lock.current = false; setBusy(false); }
   }
@@ -102,6 +112,16 @@ function TransferForm({ initial }: { initial?: RecordRow }) {
     {foreign && <TextInput mode="outlined" accessibilityLabel={t.receivedAmount} label={`${t.receivedAmount} · ${target?.currency}`} value={targetAmount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'amount'} onChangeText={value => { setTargetAmount(value); setDirty(true); setError(null); }} />}
     <AppText muted variant="caption">{foreign ? t.transferForeignHelp : t.transferSameHelp}</AppText>
     {error === 'amount' && <AppText accessibilityRole="alert">{t.amountError}</AppText>}
+    <TextInput mode="outlined" accessibilityLabel={t.transferFee} label={`${t.transferFee} · ${source?.currency}`} value={feeAmount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'fee'} onChangeText={value => { setFeeAmount(value); setDirty(true); setError(null); }} />
+    <AppText muted variant="caption">{t.transferFeeHelp}</AppText>
+    {!!feeAmount.trim() && <View style={{ gap: spacing.sm }}><AppText>{t.feeCategory}</AppText>
+      <Host matchContents colorScheme={isDark ? 'dark' : 'light'} seedColor={colors.accent} style={{ minHeight: layout.touchTarget }}>
+        <Picker testID="transfer-fee-category" selectedValue={feeCategory} enabled={!busy} onValueChange={value => { setFeeCategory(value); setDirty(true); setError(null); }}>
+          {snapshot!.categories.filter(category => category.kind === 'expense' && (!category.archived || category.id === originalFee?.category_id)).map(category => <Picker.Item key={category.id} value={category.id} label={`${entityName(category, preferences.language)}${category.archived ? ` · ${t.archived}` : ''}`} />)}
+        </Picker>
+      </Host>
+    </View>}
+    {error === 'fee' && <AppText accessibilityRole="alert">{t.transferFeeError}</AppText>}
     <List.Item title={t.date} description={new Intl.DateTimeFormat(preferences.language, { dateStyle: 'medium' }).format(date)} accessibilityRole="button" accessibilityLabel={`${t.date}: ${localDay(date)}`} disabled={busy} onPress={() => { Keyboard.dismiss(); setPickDate(true); }} left={props => <List.Icon {...props} icon="calendar-blank-outline" />} />
     {pickDate && <DateTimePicker value={date} mode="date" locale={preferences.language} themeVariant={isDark ? 'dark' : 'light'} accentColor={colors.accent} onValueChange={(_, value) => { setDate(value); setPickDate(false); setDirty(true); }} onDismiss={() => setPickDate(false)} />}
     <TextInput mode="outlined" accessibilityLabel={t.note} label={t.note} value={note} maxLength={500} editable={!busy} multiline onChangeText={value => { setNote(value); setDirty(true); }} />

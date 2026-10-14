@@ -1,6 +1,6 @@
 # Faz 1 — yerel kayıt cihaz kontrolü
 
-Durum: 14 Ekim 2026, başlangıç bakiyesi düzeltme artımından sonra tip/lint ve 243 test geçti; iOS/Android Hermes export başarılı. Güncel cihaz listeleri `ARCHIVE_MONEY_QA.md`, `CATEGORY_TRANSFER_QA.md`, `TRANSFER_EDIT_QA.md`, `OPENING_QA.md` içinde. Önceki artımda tarayıcıda 320/390 genişlikte sınırlı görsel kontrol yapıldı; aşağıdaki kontroller henüz gerçek cihazda yapılmadı. Faz 0'daki iPhone açılış bildirimi yeni akışın kabulü değildir. Kütüphane kuralları `UI_LIBRARY.md`, font cihaz testleri `TYPOGRAPHY.md` içinde.
+Durum: 14 Ekim 2026, hızlı şablon artımından sonra tip/lint ve 313 test geçti; iOS/Android Hermes export başarılı. Raporlar ve bütçe cihaz listeleri REPORTS_QA.md, BUDGET_QA.md ve GOALS_QA.md içinde; İşlemler arama/filtre için TRANSACTION_SEARCH_QA.md; şablonlar için TEMPLATES_QA.md. Güncel cihaz listeleri `ARCHIVE_MONEY_QA.md`, `CATEGORY_TRANSFER_QA.md`, `TRANSFER_EDIT_QA.md`, `OPENING_QA.md` içinde. Önceki artımda tarayıcıda 320/390 genişlikte sınırlı görsel kontrol yapıldı; aşağıdaki kontroller henüz gerçek cihazda yapılmadı. Faz 0'daki iPhone açılış bildirimi yeni akışın kabulü değildir. Kütüphane kuralları `UI_LIBRARY.md`, font cihaz testleri `TYPOGRAPHY.md` içinde.
 
 1. Expo Go'da yeniden yükle. Ana Sayfa ve İşlemler'de İşlem ekle görünür; ilk açılışta Nakit/TRY ve kategoriler hazır, örnek işlem yok.
    Geliştirme modu için güncel istisna: kullanıcının mock veri isteğiyle artık ayrı `spendo-demo.db` açılır, 4 hesap/6 aya yayılan 36 örnek kayıt sürümlü hazırlanır ve örnek modu yazısı görünür. Bu modda başlangıç/cihaz testlerini `DEVELOPMENT_DATA.md` adımlarıyla uygula. Üretim `spendo.db` için örneksiz ilk kurulum şartı devam eder.
@@ -19,4 +19,4 @@ Durum: 14 Ekim 2026, başlangıç bakiyesi düzeltme artımından sonra tip/lint
 
 Otomatik testler disk/açılış/seed/yazma/yenileme/geri alma hatalarını kontrollü olarak sınar; gerçek cihazda hata enjeksiyonu yapılmadı. UI testleri native picker ve navigasyon sınırlarını mock eder; görsel/native etkileşim kabulünün yerine geçmez.
 
-Açık kapsam: fiziksel hesap/kategori silme, komisyon/iade ekranları, kurla raporlama, büyük veri için DB sayfalaması ve performans ölçümü. Arşivleme/geri açma artık var; cihaz adımları ARCHIVE_MONEY_QA.md içinde.
+Açık kapsam: fiziksel hesap/kategori silme, iade ekranları, kurla raporlama, büyük veri için DB sayfalaması ve performans ölçümü. Arşivleme/geri açma artık var; cihaz adımları ARCHIVE_MONEY_QA.md içinde.

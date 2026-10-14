@@ -8,7 +8,7 @@ import { configure, Connection, Database } from '../src/db/connection';
 import { migrate } from '../src/db/migrations';
 import { Ledger, RecordInput } from '../src/db/ledger';
 import { money } from '../src/domain/money';
-import { demoData, demoHistory } from '../src/db/demo';
+import { demoData, demoHistory, demoBudgets, demoGoals, demoTemplates } from '../src/db/demo';
 import { ledgerDatabaseName } from '../src/db/environment';
 import { accountBalance, parseOpening } from '../src/features/ledger/account-model';
 import { defaultAccount, defaultCategory, entityName } from '../src/features/ledger/model';
@@ -47,6 +47,278 @@ function transfer(): Extract<RecordInput, { kind: 'transfer' }> {
   return { id: 'transfer', kind: 'transfer', accountId: 'cash', amount: money(2000, 'TRY'),
     targetId: 'card', targetAmount: money(2000, 'TRY'), occurredOn: '2026-10-14', note: '', source: 'manual' };
 }
+
+test('monthly budget creates, retries, edits and removes without changing records', async () => {
+  const input = { month: '2026-10', currency: 'TRY' as const, category_id: 'food', minor: 100000 };
+  await ledger.post(expense()); const records = (await ledger.snapshot()).records;
+  await ledger.setBudget(input, null); await ledger.setBudget(input, null);
+  expect((await ledger.snapshot()).budgets).toEqual([input]);
+  await ledger.setBudget({ ...input, minor: 200000 }, input); await ledger.setBudget({ ...input, minor: 200000 }, input);
+  await expect(ledger.setBudget({ ...input, minor: 300000 }, input)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.removeBudget(input)).rejects.toMatchObject({ code: 'conflict' });
+  await ledger.removeBudget({ ...input, minor: 200000 }); await ledger.removeBudget({ ...input, minor: 200000 });
+  expect((await ledger.snapshot()).budgets).toEqual([]); expect((await ledger.snapshot()).records).toEqual(records);
+});
+test('budget keys stay separate, invalid and archived creation rejected, history editable', async () => {
+  const input = { month: '2026-10', currency: 'TRY' as const, category_id: 'food', minor: 10000 };
+  await ledger.setBudget(input, null); await ledger.setBudget({ ...input, month: '2026-09' }, null); await ledger.setBudget({ ...input, currency: 'USD' }, null);
+  expect((await ledger.snapshot()).budgets).toHaveLength(3);
+  for (const invalid of [{ ...input, month: '2026-13' }, { ...input, minor: 0 }, { ...input, minor: -1 }, { ...input, category_id: 'salary' }, { ...input, category_id: 'missing' }]) await expect(ledger.setBudget(invalid, null)).rejects.toThrow();
+  await ledger.createCategory({ id: 'general', name: 'General', kind: 'expense' }); await ledger.setCategoryArchived('food', true);
+  await ledger.setBudget({ ...input, minor: 12000 }, input);
+  await expect(ledger.setBudget({ ...input, month: '2026-11' }, null)).rejects.toMatchObject({ code: 'archived' });
+  expect((await ledger.snapshot()).budgets).toHaveLength(3);
+});
+test('concurrent budget creates do not silently overwrite different limits', async () => {
+  const input = { month: '2026-10', currency: 'TRY' as const, category_id: 'food', minor: 10000 };
+  const results = await Promise.allSettled([ledger.setBudget(input, null), ledger.setBudget({ ...input, minor: 20000 }, null)]);
+  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1); expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+});
+test('budget migration v3 to v4 retains records and rolls back version on failure', async () => {
+  const old = await ledger.post(expense());
+  raw.exec('DROP TABLE entry_templates; DROP TABLE goal_contributions; DROP TABLE goals; DROP TABLE budgets; PRAGMA user_version = 3; CREATE TABLE budgets(sentinel TEXT);');
+  await expect(migrate(db)).rejects.toThrow(); expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 3 });
+  raw.exec('DROP TABLE budgets;'); await migrate(db); await migrate(db);
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 6 }); expect((await ledger.snapshot()).records).toEqual([old]);
+});
+
+test('development budget seed preserves custom limits, edits and removals on repeat', async () => {
+  await ledger.bootstrap();
+  await ledger.seedDevelopment(demoData('2026-10-14'));
+  await ledger.seedDevelopment(demoHistory('2026-10-14'), 2);
+  const seed = demoBudgets('2026-10-14');
+  await ledger.setBudget({ ...seed.budgets[0], minor: 300000 }, null);
+  await ledger.seedDevelopment(seed, 3);
+  expect((await ledger.snapshot()).budgets).toHaveLength(4);
+  expect((await ledger.snapshot()).records).toHaveLength(36);
+  const budget = (await ledger.snapshot()).budgets!.find(item => item.month === '2026-10' && item.category_id === 'default-food')!;
+  expect(budget.minor).toBe(300000); await ledger.removeBudget(budget);
+  await ledger.seedDevelopment(demoBudgets('2026-11-01'), 3);
+  expect((await ledger.snapshot()).budgets).toHaveLength(3);
+});
+
+test('goals and contribution retries never change accounts or income/expense and cannot resurrect removed records', async () => {
+  const goal = { id: 'holiday', name: 'Holiday', currency: 'TRY' as const, target_minor: 100000 };
+  await ledger.post(expense()); const before = (await ledger.snapshot()).records;
+  await ledger.setGoal(goal, null); await ledger.setGoal(goal, null);
+  const input = { id: 'saving', goalId: goal.id, amount: money(25000, 'TRY'), day: '2026-10-14' };
+  await ledger.addContribution(input); await ledger.addContribution(input);
+  expect((await ledger.snapshot()).contributions).toHaveLength(1);
+  expect(await ledger.balance('cash')).toEqual(money(-1200, 'TRY'));
+  expect((await ledger.snapshot()).records).toEqual(before);
+  await ledger.removeContribution((await ledger.snapshot()).contributions![0]); await ledger.addContribution(input);
+  expect((await ledger.snapshot()).contributions).toEqual([]);
+  await ledger.removeGoal((await ledger.snapshot()).goals![0]);
+  await expect(ledger.setGoal(goal, null)).rejects.toMatchObject({ code: 'missing' });
+  await expect(ledger.addContribution({ ...input, id: 'fresh' })).rejects.toMatchObject({ code: 'missing' });
+});
+test('goal metadata changes preserve contributions, reject currency changes and stale updates', async () => {
+  const goal = { id: 'holiday', name: 'Holiday', currency: 'TRY' as const, target_minor: 100000 };
+  await ledger.setGoal(goal, null); await ledger.addContribution({ id: 'saving', goalId: goal.id, amount: money(25000, 'TRY'), day: '2026-10-14' });
+  const original = (await ledger.snapshot()).goals![0];
+  await ledger.setGoal({ ...goal, name: 'Trip', target_minor: 200000 }, original);
+  await expect(ledger.setGoal({ ...goal, name: 'Stale' }, original)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.removeGoal(original)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.setGoal({ ...goal, currency: 'USD' }, original)).rejects.toMatchObject({ code: 'invalid' });
+  expect((await ledger.snapshot()).contributions![0].minor).toBe(25000);
+});
+test('invalid goal/contribution inputs and contribution overflow roll back atomically', async () => {
+  const goal = { id: 'limit', name: 'Limit', currency: 'TRY' as const, target_minor: Number.MAX_SAFE_INTEGER };
+  await ledger.setGoal(goal, null);
+  const input = { id: 'saving', goalId: goal.id, amount: money(Number.MAX_SAFE_INTEGER, 'TRY'), day: '2026-10-14' };
+  await ledger.addContribution(input);
+  await expect(ledger.addContribution({ ...input, id: 'overflow', amount: money(1, 'TRY') })).rejects.toMatchObject({ code: 'range' });
+  await expect(ledger.addContribution({ ...input, amount: money(100, 'USD') })).rejects.toMatchObject({ code: 'invalid' });
+  await expect(ledger.addContribution({ ...input, amount: money(0, 'TRY') })).rejects.toMatchObject({ code: 'invalid' });
+  await expect(ledger.setGoal({ ...goal, target_minor: 0 }, null)).rejects.toMatchObject({ code: 'invalid' });
+  expect((await ledger.snapshot()).contributions).toHaveLength(1);
+});
+test('goals migration v4 to v5 preserves existing records and rolls back a partial create', async () => {
+  const old = await ledger.post(expense());
+  raw.exec('DROP TABLE entry_templates; DROP TABLE goal_contributions; DROP TABLE goals; PRAGMA user_version = 4; CREATE TABLE goal_contributions(sentinel TEXT);');
+  await expect(migrate(db)).rejects.toThrow(); expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 4 });
+  expect(raw.prepare("SELECT name FROM sqlite_master WHERE name = 'goals'").all()).toEqual([]);
+  raw.exec('DROP TABLE goal_contributions;'); await migrate(db); await migrate(db);
+  expect((await ledger.snapshot()).records).toEqual([old]); expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 6 });
+});
+
+test('goal demo seed preserves changes, removal and financial records across repeated opening', async () => {
+  await ledger.bootstrap(); await ledger.seedDevelopment(demoData('2026-10-14'));
+  const before = (await ledger.snapshot()).records;
+  await ledger.seedDevelopment(demoGoals('2026-10-14'), 4);
+  const original = (await ledger.snapshot()).goals!.find(goal => goal.id === 'demo-goal-emergency')!;
+  await ledger.setGoal({ ...original, name: 'Custom goal', target_minor: 2000000 }, original);
+  await ledger.removeGoal((await ledger.snapshot()).goals!.find(goal => goal.id === 'demo-goal-holiday')!);
+  await ledger.removeContribution((await ledger.snapshot()).contributions![0]);
+  await ledger.seedDevelopment(demoGoals('2026-11-01'), 4);
+  expect((await ledger.snapshot()).goals).toEqual([expect.objectContaining({ name: 'Custom goal', target_minor: 2000000 })]);
+  expect((await ledger.snapshot()).contributions).toEqual([]); expect((await ledger.snapshot()).records).toEqual(before);
+});
+
+test('template CRUD changes only presets, retries keep identity and cannot resurrect removed preset', async () => {
+  const template = { id: 'coffee-template', name: 'Coffee', kind: 'expense' as const, account_id: 'cash', currency: 'TRY' as const, minor: 1250, category_id: 'food', note: 'Coffee' };
+  await ledger.post(expense()); const before = (await ledger.snapshot()).records;
+  await ledger.setTemplate(template, null); await ledger.setTemplate(template, null);
+  const original = (await ledger.snapshot()).templates![0], edited = { ...template, name: 'Daily coffee', minor: 1500 };
+  await ledger.setTemplate(edited, original); await ledger.setTemplate(edited, original);
+  await expect(ledger.setTemplate({ ...template, minor: 2000 }, original)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.removeTemplate(original)).rejects.toMatchObject({ code: 'conflict' });
+  await ledger.removeTemplate((await ledger.snapshot()).templates![0]);
+  await expect(ledger.setTemplate(template, null)).rejects.toMatchObject({ code: 'missing' });
+  expect((await ledger.snapshot()).templates).toEqual([]); expect((await ledger.snapshot()).records).toEqual(before);
+});
+test('templates validate money, account currency and category kind; own archived references can be edited', async () => {
+  const template = { id: 'coffee-template', name: 'Coffee', kind: 'expense' as const, account_id: 'cash', currency: 'TRY' as const, minor: 1250, category_id: 'food', note: '' };
+  for (const bad of [{ ...template, minor: 0 }, { ...template, currency: 'USD' as const }, { ...template, category_id: 'salary' }, { ...template, name: '' }]) await expect(ledger.setTemplate(bad, null)).rejects.toThrow();
+  await ledger.setTemplate(template, null); const original = (await ledger.snapshot()).templates![0];
+  await ledger.setAccountArchived('cash', true); await ledger.createCategory({ id: 'general', name: 'General', kind: 'expense' }); await ledger.setCategoryArchived('food', true);
+  await ledger.setTemplate({ ...template, minor: 1500 }, original);
+  await expect(ledger.setTemplate({ ...template, id: 'new' }, null)).rejects.toMatchObject({ code: 'archived' });
+});
+test('template migration v5 to v6 preserves records and version on create failure', async () => {
+  const old = await ledger.post(expense());
+  raw.exec('DROP TABLE entry_templates; PRAGMA user_version = 5; CREATE TABLE entry_templates(sentinel TEXT);');
+  await expect(migrate(db)).rejects.toThrow(); expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 5 });
+  raw.exec('DROP TABLE entry_templates;'); await migrate(db); await migrate(db);
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 6 }); expect((await ledger.snapshot()).records).toEqual([old]);
+});
+
+test('template seed keeps edits/removals and never adds transactions by itself', async () => {
+  await ledger.bootstrap(); await ledger.seedDevelopment(demoData('2026-10-14')); const records = (await ledger.snapshot()).records;
+  await ledger.seedDevelopment(demoTemplates(), 5);
+  const original = (await ledger.snapshot()).templates!.find(item => item.id === 'demo-template-coffee')!;
+  await ledger.setTemplate({ ...original, minor: 12500 }, original);
+  await ledger.removeTemplate((await ledger.snapshot()).templates!.find(item => item.id === 'demo-template-rent')!);
+  await ledger.seedDevelopment(demoTemplates(), 5);
+  expect((await ledger.snapshot()).templates).toHaveLength(2);
+  expect((await ledger.snapshot()).templates!.find(item => item.id === original.id)?.minor).toBe(12500);
+  expect((await ledger.snapshot()).records).toEqual(records);
+});
+
+function feeInput(parent = transfer(), minor = 125): import('../src/db/ledger').TransferFeeInput {
+  return { id: 'fee', kind: 'expense', accountId: parent.accountId, amount: money(minor, parent.amount.currency), categoryId: 'food', occurredOn: parent.occurredOn, note: '', source: parent.source };
+}
+test('transfer fee creates a separate expense with exact balances, atomic undo and no resurrection', async () => {
+  const parent = transfer(); const fee = feeInput();
+  const saved = await ledger.writeTransfer(parent, fee);
+  expect(await ledger.balance('cash')).toEqual(money(-2125, 'TRY'));
+  expect(await ledger.balance('card')).toEqual(money(2000, 'TRY'));
+  expect((await ledger.totals('2026-10-01', '2026-10-31', 'TRY')).expense.minor).toBe(125);
+  expect((await ledger.totals('2026-10-01', '2026-10-31', 'TRY')).income.minor).toBe(0);
+  expect(await ledger.writeTransfer(parent, fee)).toEqual(saved);
+  expect((await ledger.snapshot()).feeLinks).toEqual([{ fee_id: 'fee', transfer_id: 'transfer' }]);
+  await ledger.voidRecord(saved.id);
+  expect((await ledger.snapshot()).records).toEqual([]);
+  expect(await ledger.balance('cash')).toEqual(money(0, 'TRY'));
+  expect(await ledger.balance('card')).toEqual(money(0, 'TRY'));
+  await expect(ledger.writeTransfer(parent, fee)).rejects.toMatchObject({ code: 'missing' });
+});
+
+test('transfer and fee move together across currency, account, category and month with stale protection', async () => {
+  const original = await ledger.writeTransfer(transfer(), feeInput());
+  const oldFee = (await ledger.snapshot()).records.find(row => row.id === 'fee')!;
+  const moved = { ...transfer(), accountId: 'usd', amount: money(500, 'USD'), occurredOn: '2026-09-30' };
+  const newFee = feeInput(moved, 50);
+  const edited = await ledger.writeTransfer(moved, newFee, original, oldFee);
+  expect(await ledger.balance('cash')).toEqual(money(0, 'TRY'));
+  expect(await ledger.balance('usd')).toEqual(money(-550, 'USD'));
+  expect(await ledger.balance('card')).toEqual(money(2000, 'TRY'));
+  expect((await ledger.totals('2026-10-01', '2026-10-31', 'TRY')).expense.minor).toBe(0);
+  expect((await ledger.totals('2026-09-01', '2026-09-30', 'USD')).expense.minor).toBe(50);
+  expect(await ledger.writeTransfer(moved, newFee, original, oldFee)).toEqual(edited);
+  await expect(ledger.writeTransfer(moved, { ...newFee, amount: money(51, 'USD') }, original, oldFee)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.voidRecord(edited.id, edited, oldFee)).rejects.toMatchObject({ code: 'conflict' });
+  const currentFee = (await ledger.snapshot()).records.find(row => row.id === 'fee')!;
+  await ledger.voidRecord(edited.id, edited, currentFee);
+  expect((await ledger.snapshot()).records).toEqual([]);
+});
+
+test('fee removal keeps transfer, readding uses a fresh expense identity, independent edits are blocked', async () => {
+  const original = await ledger.writeTransfer(transfer(), feeInput());
+  const oldFee = (await ledger.snapshot()).records.find(row => row.id === 'fee')!;
+  await expect(ledger.update(feeInput(), oldFee)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.voidRecord(oldFee.id, oldFee)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.updateTransfer(transfer(), original)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.voidRecord(original.id, original)).rejects.toMatchObject({ code: 'conflict' });
+  await ledger.writeTransfer(transfer(), null, original, oldFee);
+  expect(await ledger.balance('cash')).toEqual(money(-2000, 'TRY'));
+  expect((await ledger.snapshot()).feeLinks).toEqual([]);
+  await expect(ledger.writeTransfer(transfer(), feeInput(), original, null)).rejects.toMatchObject({ code: 'conflict' });
+  await ledger.writeTransfer(transfer(), { ...feeInput(), id: 'fresh-fee' }, original, null);
+  expect((await ledger.snapshot()).records).toHaveLength(2);
+});
+
+test('invalid fee references and final-balance overflow roll back transfer and expense together', async () => {
+  await ledger.post({ id: 'limit', kind: 'opening', accountId: 'cash', amount: money(-Number.MAX_SAFE_INTEGER + 2000, 'TRY'), occurredOn: '2026-10-14', note: '', source: 'manual' });
+  await expect(ledger.writeTransfer(transfer(), feeInput())).rejects.toMatchObject({ code: 'range' });
+  expect((await ledger.snapshot()).records).toHaveLength(1);
+  expect((await ledger.snapshot()).feeLinks).toEqual([]);
+  for (const fee of [{ ...feeInput(), accountId: 'card' }, { ...feeInput(), amount: money(10, 'USD') }, { ...feeInput(), occurredOn: '2026-09-30' }, { ...feeInput(), categoryId: 'salary' }, { ...feeInput(), id: 'transfer' }]) {
+    await expect(ledger.writeTransfer(transfer(), fee)).rejects.toThrow();
+  }
+  expect((await ledger.snapshot()).records).toHaveLength(1);
+});
+
+test('fee correction failure and delete overflow retain the complete original group', async () => {
+  const original = await ledger.writeTransfer(transfer(), feeInput());
+  const oldFee = (await ledger.snapshot()).records.find(row => row.id === 'fee')!;
+  await ledger.post({ id: 'limit', kind: 'opening', accountId: 'cash', amount: money(Number.MAX_SAFE_INTEGER, 'TRY'), occurredOn: '2026-10-14', note: '', source: 'manual' });
+  await ledger.post(expense({ id: 'extra', kind: 'income', categoryId: 'salary', amount: money(2125, 'TRY') }));
+  const before = await ledger.snapshot();
+  await expect(ledger.voidRecord(original.id, original, oldFee)).rejects.toMatchObject({ code: 'range' });
+  expect(await ledger.snapshot()).toEqual(before);
+  await expect(ledger.writeTransfer(transfer(), feeInput(transfer(), 1), original, oldFee)).rejects.toMatchObject({ code: 'range' });
+  expect(await ledger.snapshot()).toEqual(before);
+});
+
+test('archived fee category can be preserved, new archived references are rejected', async () => {
+  await ledger.createCategory({ id: 'general', name: 'General', kind: 'expense' });
+  const original = await ledger.writeTransfer(transfer(), feeInput());
+  const oldFee = (await ledger.snapshot()).records.find(row => row.id === 'fee')!;
+  await ledger.setCategoryArchived('food', true);
+  await ledger.setAccountArchived('cash', true);
+  const edited = await ledger.writeTransfer(transfer(), feeInput(transfer(), 200), original, oldFee);
+  expect(edited.id).toBe(original.id);
+  await expect(ledger.writeTransfer({ ...transfer(), id: 'new' }, { ...feeInput(), id: 'new-fee' })).rejects.toMatchObject({ code: 'archived' });
+});
+
+test('v2 to v3 migration preserves rows and rolls back a failed index creation before retry', async () => {
+  const old = await ledger.post(expense());
+  raw.exec('DROP TABLE entry_templates; DROP TABLE goal_contributions; DROP TABLE goals; DROP TABLE budgets; DROP TABLE transfer_fees; PRAGMA user_version = 2; CREATE INDEX transfer_fees_parent ON accounts(name);');
+  await expect(migrate(db)).rejects.toThrow();
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 2 });
+  expect(raw.prepare("SELECT name FROM sqlite_master WHERE name = 'transfer_fees'").all()).toEqual([]);
+  raw.exec('DROP INDEX transfer_fees_parent;');
+  await migrate(db); await migrate(db);
+  expect((await ledger.snapshot()).records).toEqual([old]);
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 6 });
+});
+
+test('fee-only edits detect concurrent changes even when parent transfer remains identical', async () => {
+  const original = await ledger.writeTransfer(transfer(), feeInput());
+  const openedFee = (await ledger.snapshot()).records.find(row => row.id === 'fee')!;
+  await ledger.writeTransfer(transfer(), feeInput(transfer(), 250), original, openedFee);
+  await expect(ledger.writeTransfer(transfer(), feeInput(transfer(), 300), original, openedFee)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.writeTransfer(transfer(), null, original, openedFee)).rejects.toMatchObject({ code: 'conflict' });
+  await expect(ledger.voidRecord(original.id, original, openedFee)).rejects.toMatchObject({ code: 'conflict' });
+  expect((await ledger.snapshot()).records.find(row => row.id === 'fee')?.minor).toBe(250);
+});
+
+test('concurrent first-fee requests and SQL relationship guards prevent duplicate or mismatched links', async () => {
+  const original = await ledger.post(transfer());
+  const results = await Promise.allSettled([
+    ledger.writeTransfer(transfer(), feeInput(), original, null),
+    ledger.writeTransfer(transfer(), { ...feeInput(), id: 'other-fee' }, original, null),
+  ]);
+  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+  expect((await ledger.snapshot()).records).toHaveLength(2);
+  const extra = await ledger.post(expense({ id: 'extra-fee' }));
+  expect(() => raw.prepare('INSERT INTO transfer_fees(fee_id,transfer_id) VALUES (?,?)').run(extra.id, original.id)).toThrow();
+  const otherTransfer = await ledger.post({ ...transfer(), id: 'other-transfer', occurredOn: '2026-09-30' });
+  expect(() => raw.prepare('INSERT INTO transfer_fees(fee_id,transfer_id) VALUES (?,?)').run(extra.id, otherTransfer.id)).toThrow();
+  expect(() => raw.prepare('INSERT INTO transfer_fees(fee_id,transfer_id) VALUES (?,?)').run('missing', original.id)).toThrow();
+});
 
 test('opening correction preserves identity and unrelated movements while allowing signed zero values', async () => {
   const input = { id: 'old-opening', kind: 'opening' as const, accountId: 'cash', amount: money(10000, 'TRY'), occurredOn: '2026-09-01', note: 'Imported', source: 'import' as const };
@@ -196,16 +468,16 @@ test('invalid transfer edits cannot change kind, source, identity, equal-currenc
 test('migration is repeatable without losing data', async () => {
   await ledger.post(expense());
   await migrate(db);
-  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 2 });
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 6 });
   expect(await ledger.balance('cash')).toEqual(money(-1200, 'TRY'));
 });
 
 test('v1 to v2 migration preserves ledger data and adds active flags', async () => {
   await ledger.post(expense());
-  raw.exec('ALTER TABLE accounts DROP COLUMN archived; ALTER TABLE categories DROP COLUMN archived; PRAGMA user_version = 1;');
+  raw.exec('DROP TABLE entry_templates; DROP TABLE goal_contributions; DROP TABLE goals; DROP TABLE budgets; DROP TABLE transfer_fees; ALTER TABLE accounts DROP COLUMN archived; ALTER TABLE categories DROP COLUMN archived; PRAGMA user_version = 1;');
   await migrate(db);
   await migrate(db);
-  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 2 });
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 6 });
   expect((await ledger.accounts()).every(account => account.archived === 0)).toBe(true);
   expect((await ledger.categories()).every(category => category.archived === 0)).toBe(true);
   expect(await ledger.balance('cash')).toEqual(money(-1200, 'TRY'));
@@ -213,7 +485,7 @@ test('v1 to v2 migration preserves ledger data and adds active flags', async () 
 });
 
 test('failed v2 migration rolls back added columns and version before successful retry', async () => {
-  raw.exec('ALTER TABLE accounts DROP COLUMN archived; PRAGMA user_version = 1;');
+  raw.exec('DROP TABLE entry_templates; DROP TABLE goal_contributions; DROP TABLE goals; DROP TABLE budgets; DROP TABLE transfer_fees; ALTER TABLE accounts DROP COLUMN archived; PRAGMA user_version = 1;');
   await expect(migrate(db)).rejects.toThrow(); // Duplicate categories column after accounts ALTER.
   expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 1 });
   const columns = raw.prepare('PRAGMA table_info(accounts)').all() as { name: string }[];
@@ -298,9 +570,9 @@ test('failed bootstrap is atomic and retry completes the seed', async () => {
 });
 
 test('future schemas are rejected without changing data or version', async () => {
-  raw.exec('PRAGMA user_version = 3');
+  raw.exec('PRAGMA user_version = 7');
   await expect(migrate(db)).rejects.toThrow('database.version');
-  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 3 });
+  expect(raw.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 7 });
   expect(await ledger.accounts()).toHaveLength(3);
 });
 
@@ -459,26 +731,40 @@ test('file database persists records across close and reopen', async () => {
     await persistent.update(expense({ amount: money(2500, 'TRY'), note: 'Edited' }), original);
     await persistent.createAccount({ id: 'card', name: 'Card', kind: 'credit', currency: 'TRY' });
     const oldTransfer = await persistent.post(transfer());
-    await persistent.updateTransfer({ ...transfer(), amount: money(1000, 'TRY'), targetAmount: money(1000, 'TRY') }, oldTransfer);
+    const updatedTransfer = await persistent.updateTransfer({ ...transfer(), amount: money(1000, 'TRY'), targetAmount: money(1000, 'TRY') }, oldTransfer);
+    await persistent.writeTransfer({ ...transfer(), amount: money(1000, 'TRY'), targetAmount: money(1000, 'TRY') }, feeInput(), updatedTransfer, null);
     const openingInput = { id: 'persist-opening', kind: 'opening' as const, accountId: 'cash', amount: money(0, 'TRY'), occurredOn: '2026-09-01', note: '', source: 'manual' as const };
     const oldOpening = await persistent.setOpening(openingInput, null);
+    const savedBudget = { month: '2026-10', currency: 'TRY' as const, category_id: 'food', minor: 500000 };
+    await persistent.setBudget(savedBudget, null);
+    const savedTemplate = { id: 'coffee-template', name: 'Coffee', kind: 'expense' as const, account_id: 'cash', currency: 'TRY' as const, minor: 1250, category_id: 'food', note: '' };
+    await persistent.setTemplate(savedTemplate, null);
+    const savedGoal = { id: 'holiday', name: 'Holiday', currency: 'TRY' as const, target_minor: 100000 };
+    await persistent.setGoal(savedGoal, null); await persistent.addContribution({ id: 'saving', goalId: savedGoal.id, amount: money(25000, 'TRY'), day: '2026-10-14' });
     await persistent.setOpening({ ...openingInput, amount: money(5000, 'TRY') }, oldOpening);
     await persistent.close();
     persistent = undefined;
     const second = await configure(connection(new DatabaseSync(file)));
     await migrate(second);
     persistent = new Ledger(second);
-    expect(await persistent.balance('cash')).toEqual(money(1500, 'TRY'));
+    expect(await persistent.balance('cash')).toEqual(money(1375, 'TRY'));
+    expect((await persistent.snapshot()).budgets).toEqual([savedBudget]);
+    expect((await persistent.snapshot()).templates).toEqual([{ ...savedTemplate, deleted: 0 }]);
+    expect((await persistent.snapshot()).goals).toEqual([{ ...savedGoal, deleted: 0 }]);
+    expect((await persistent.snapshot()).contributions).toEqual([expect.objectContaining({ id: 'saving', minor: 25000 })]);
     expect(await persistent.balance('card')).toEqual(money(1000, 'TRY'));
-    expect(await persistent.records('2026-10-01', '2026-10-31')).toHaveLength(2);
+    expect(await persistent.records('2026-10-01', '2026-10-31')).toHaveLength(3);
     await persistent.voidRecord('expense');
     const savedTransfer = (await persistent.snapshot()).records.find(row => row.id === 'transfer')!;
-    await persistent.voidRecord(savedTransfer.id, savedTransfer);
+    const savedFee = (await persistent.snapshot()).records.find(row => row.id === 'fee')!;
+    expect((await persistent.snapshot()).feeLinks).toEqual([{ fee_id: savedFee.id, transfer_id: savedTransfer.id }]);
+    await persistent.voidRecord(savedTransfer.id, savedTransfer, savedFee);
     await persistent.close();
     persistent = undefined;
     persistent = new Ledger(await configure(connection(new DatabaseSync(file))));
     expect((await persistent.snapshot()).records).toEqual([expect.objectContaining({ id: 'persist-opening', minor: 5000, occurred_on: '2026-09-01' })]);
     expect(await persistent.balance('cash')).toEqual(money(5000, 'TRY'));
+    await persistent.removeBudget(savedBudget); expect((await persistent.snapshot()).budgets).toEqual([]); expect(await persistent.balance('cash')).toEqual(money(5000, 'TRY'));
   } finally {
     await persistent?.close();
     const target = resolve(directory);

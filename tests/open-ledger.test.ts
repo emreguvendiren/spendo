@@ -11,7 +11,7 @@ jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 jest.mock('@/db/connection', () => ({ configure: jest.fn() }));
 jest.mock('@/db/migrations', () => ({ migrate: jest.fn() }));
 jest.mock('@/db/ledger', () => ({ Ledger: jest.fn(() => mockLedger) }));
-jest.mock('@/db/demo', () => ({ demoData: jest.fn(() => ({ accounts: [], records: [] })), demoHistory: jest.fn(() => ({ accounts: [], records: [] })) }));
+jest.mock('@/db/demo', () => ({ demoData: jest.fn(() => ({ accounts: [], records: [] })), demoHistory: jest.fn(() => ({ accounts: [], records: [] })), demoBudgets: jest.fn(() => ({ accounts: [], records: [], budgets: [] })), demoGoals: jest.fn(() => ({ accounts: [], records: [], goals: [], contributions: [] })), demoTemplates: jest.fn(() => ({ accounts: [], records: [], templates: [] })) }));
 jest.mock('@/db/environment', () => ({
   get developmentDataEnabled() { return mockDevelopment; },
   ledgerDatabaseName: (development: boolean) => development ? 'spendo-demo.db' : 'spendo.db',
@@ -34,7 +34,10 @@ test('development opening seeds the demo database before handing it to the provi
   expect(mockLedger.bootstrap).toHaveBeenCalledTimes(1);
   expect(demoData).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
   expect(mockLedger.seedDevelopment).toHaveBeenCalledWith({ accounts: [], records: [] });
-  expect(mockLedger.seedDevelopment).toHaveBeenLastCalledWith({ accounts: [], records: [] }, 2);
+  expect(mockLedger.seedDevelopment).toHaveBeenNthCalledWith(2, { accounts: [], records: [] }, 2);
+  expect(mockLedger.seedDevelopment).toHaveBeenNthCalledWith(3, { accounts: [], records: [], budgets: [] }, 3);
+  expect(mockLedger.seedDevelopment).toHaveBeenNthCalledWith(4, { accounts: [], records: [], goals: [], contributions: [] }, 4);
+  expect(mockLedger.seedDevelopment).toHaveBeenLastCalledWith({ accounts: [], records: [], templates: [] }, 5);
 });
 
 test('production opening never seeds sample data', async () => {

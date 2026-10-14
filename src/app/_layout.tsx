@@ -18,6 +18,11 @@ function Navigation() {
       <Stack.Screen name="category" options={{ title: t.addCategory }} />
       <Stack.Screen name="transfer" options={{ title: t.transfer }} />
       <Stack.Screen name="opening" options={{ title: t.editOpening }} />
+      <Stack.Screen name="budget" options={{ title: t.addBudget }} />
+      <Stack.Screen name="goals" options={{ title: t.goals }} />
+      <Stack.Screen name="goal" options={{ title: t.addGoal }} />
+      <Stack.Screen name="templates" options={{ title: t.templates }} />
+      <Stack.Screen name="template" options={{ title: t.addTemplate }} />
     </Stack>
   </>;
 }
