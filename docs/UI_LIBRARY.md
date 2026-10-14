@@ -31,3 +31,9 @@ Karar tarihi: 14 Ekim 2026. Kullanıcı mevcut UI'ı yetersiz buldu ve modern bi
 - Geçici, yalnız bellekte örnek veri kullanan önizleme ile tarayıcıda 390 genişlikte açık/koyu ana ekran ve form; 320 genişlikte açık ana ekran/form görsel olarak incelendi. Önizleme rotası teslimden önce kaldırıldı; örnek veriler gerçek DB'ye yazılmadı.
 - Tarayıcı incelemesi native cihaz kabulü değildir. iPhone/Android seçici, klavye, büyük sistem yazısı ve ekran okuyucu kontrolleri `docs/PHASE_1_QA.md` üzerinden devam eder.
 - Paket eklenirken npm 65 mevcut güvenlik bulgusu bildirdi (49 high, 16 moderate); bu çalışma bağımlılık güvenlik incelemesini kapatmaz.
+
+## SVG grafik altyapısı — 14 Ekim 2026
+- Kullanıcının tüm sayfaları yeniden tasarlama ve chart isteğiyle react-native-svg 15.15.4 kuruldu: npx expo install react-native-svg. Expo SDK 57 önerilen sürüm, Expo Go içinde mevcut; Paper ana kontrol kütüphanesi ve @expo/ui native picker sınırı korunur.
+- Resmi kaynak: https://docs.expo.dev/versions/latest/sdk/svg/ ve https://github.com/software-mansion/react-native-svg. Görsel referans: https://developer.apple.com/design/human-interface-guidelines/charts ve https://m2.material.io/design/communication/data-visualization.html. Mevcut expo-design-system/native-ui skill ve native-slop referansı kullanıldı; ek harici skill kurulmadı, dış servise kullanıcı verisi/geri bildirim gönderilmedi.
+- CashflowChart ve ExpenseChart yalnız yerel snapshot'tan grafik çizer. Altı aylık kesin tutarlar ve kategori toplamları chart-model.ts/report modelinde hesaplanır; kayan nokta yalnız sınırlı görsel oran/koordinattır. Çizim toplamların kaynağı değildir. SVG herhangi bir kullanıcı yüklemesini/ağ içeriğini render etmez.
+- Native Stack/geri/klavye ve finansal repository değişmez. Ekran düzenlerinin detayları DESIGN.md, cihaz kabulü UI_REDESIGN_QA.md. Tarayıcı sentetik preview ve ekran görüntüleri native kabul sayılmaz.

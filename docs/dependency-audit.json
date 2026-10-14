@@ -83,8 +83,8 @@
         "node_modules/@expo/config-plugins"
       ],
       "fixAvailable": {
-        "name": "expo",
-        "version": "44.0.6",
+        "name": "expo-splash-screen",
+        "version": "55.0.25",
         "isSemVerMajor": true
       }
     },
@@ -276,7 +276,8 @@
       "effects": [
         "@jest/globals",
         "jest-circus",
-        "jest-environment-jsdom"
+        "jest-environment-jsdom",
+        "jest-runner"
       ],
       "range": "<=30.2.0",
       "nodes": [
@@ -364,12 +365,18 @@
         "@jest/transform",
         "jest-message-util"
       ],
-      "effects": [],
+      "effects": [
+        "@jest/core"
+      ],
       "range": "<=30.2.0",
       "nodes": [
         "node_modules/@jest/reporters"
       ],
-      "fixAvailable": true
+      "fixAvailable": {
+        "name": "jest",
+        "version": "30.5.2",
+        "isSemVerMajor": true
+      }
     },
     "@jest/test-result": {
       "name": "@jest/test-result",
@@ -502,8 +509,8 @@
         "node_modules/@react-native/metro-config"
       ],
       "fixAvailable": {
-        "name": "react-native-worklets",
-        "version": "0.7.4",
+        "name": "react-native",
+        "version": "0.87.1",
         "isSemVerMajor": true
       }
     },
@@ -577,8 +584,8 @@
         "node_modules/babel-jest"
       ],
       "fixAvailable": {
-        "name": "jest",
-        "version": "30.5.2",
+        "name": "jest-expo",
+        "version": "58.0.9",
         "isSemVerMajor": true
       }
     },
@@ -704,6 +711,7 @@
         "jest-message-util"
       ],
       "effects": [
+        "@jest/expect",
         "@types/jest",
         "jest-snapshot"
       ],
@@ -712,8 +720,8 @@
         "node_modules/expect"
       ],
       "fixAvailable": {
-        "name": "jest-expo",
-        "version": "58.0.9",
+        "name": "@types/jest",
+        "version": "30.0.0",
         "isSemVerMajor": true
       }
     },
@@ -947,7 +955,6 @@
       "effects": [
         "@jest/test-sequencer",
         "jest-resolve",
-        "jest-runner",
         "jest-runtime"
       ],
       "range": "18.1.0 - 30.2.0",
@@ -973,6 +980,7 @@
         "@jest/reporters",
         "expect",
         "jest-circus",
+        "jest-runner",
         "jest-runtime",
         "jest-snapshot"
       ],
@@ -1017,7 +1025,7 @@
         "jest-snapshot"
       ],
       "effects": [],
-      "range": "27.0.0-next.0 - 30.2.0",
+      "range": "23.3.0 - 30.2.0",
       "nodes": [
         "node_modules/jest-resolve-dependencies"
       ],
@@ -1040,7 +1048,6 @@
         "jest-watcher"
       ],
       "effects": [
-        "@jest/core",
         "jest-config"
       ],
       "range": "21.0.0-alpha.1 - 30.2.0",
@@ -1092,7 +1099,6 @@
         "jest-message-util"
       ],
       "effects": [
-        "@jest/expect",
         "jest-circus",
         "jest-expo",
         "jest-resolve-dependencies",
@@ -1461,8 +1467,8 @@
         "node_modules/uuid"
       ],
       "fixAvailable": {
-        "name": "expo",
-        "version": "44.0.6",
+        "name": "expo-splash-screen",
+        "version": "55.0.25",
         "isSemVerMajor": true
       }
     },
@@ -1481,8 +1487,8 @@
         "node_modules/xcode"
       ],
       "fixAvailable": {
-        "name": "expo",
-        "version": "44.0.6",
+        "name": "expo-splash-screen",
+        "version": "55.0.25",
         "isSemVerMajor": true
       }
     }
@@ -1497,12 +1503,12 @@
       "total": 65
     },
     "dependencies": {
-      "prod": 793,
+      "prod": 815,
       "dev": 321,
       "optional": 40,
       "peer": 16,
       "peerOptional": 0,
-      "total": 1141
+      "total": 1163
     }
   }
 }

@@ -10,6 +10,7 @@ import { EntryTemplate, LedgerError, RecordInput, RecordRow } from '@/db/ledger'
 import { amountText, money, parseAmount } from '@/domain/money';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
 import { ActionButton } from '@/components/action-button';
 import { layout, radius, spacing, typography } from '@/theme/tokens';
 import { usePreferences } from '@/features/preferences/provider';
@@ -104,16 +105,17 @@ function EntryForm({ initial, template, templateMode = false }: { initial?: Reco
   if (done && templateMode) return <Screen><AppText accessibilityRole="alert">{deleted ? t.templateRemoved : t.templateSaved}</AppText><LedgerStatus showUndo={false} /><ActionButton title={t.templates} onPress={() => router.replace('/templates')} /></Screen>;
   if (done) return <Screen>{original && <AppText accessibilityRole="alert">{deleted ? t.deleted : t.updated}</AppText>}<LedgerStatus showUndo={!original} /><ActionButton title={t.transactions} onPress={() => router.replace('/(tabs)/transactions')} /></Screen>;
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}>
-    <Screen>
+    <Screen form>
       <DemoNotice />
-      {templateMode && <><TextInput mode="outlined" label={t.templateName} accessibilityLabel={t.templateName} value={templateName} maxLength={80} editable={!busy} error={error === 'name'} onChangeText={value => { setTemplateName(value); setDirty(true); setError(null); }} /><AppText muted>{t.templateHelp}</AppText></>}
+      <FeatureIntro icon={templateMode ? 'lightning-bolt-outline' : kind === 'income' ? 'arrow-bottom-left' : 'arrow-top-right'} title={templateMode ? (template ? t.editTemplate : t.addTemplate) : t.entryIntro} />
+      {templateMode && <><TextInput mode="outlined" label={t.templateName} accessibilityLabel={t.templateName} value={templateName} maxLength={80} editable={!busy} error={error === 'name'} onChangeText={value => { setTemplateName(value); setDirty(true); setError(null); }} /><AppText muted variant="caption">{t.templateHelp}</AppText></>}
       {error === 'name' && <AppText accessibilityRole="alert">{t.templateNameError}</AppText>}
       <View style={{ gap: spacing.sm }}>
         <AppText muted variant="caption">{t.amount} · {account?.currency}</AppText>
         <TextInput mode="flat" accessibilityLabel={t.amount} value={amount} placeholder={preferences.language === 'tr' ? '0,00' : '0.00'}
           onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} underlineColor={colors.separator} activeUnderlineColor={colors.accent}
           editable={!busy} keyboardType="decimal-pad" autoFocus maxLength={40} error={error === 'amount'}
-          style={{ backgroundColor: colors.background, fontSize: typography.display }} contentStyle={{ ...faces.semibold, paddingHorizontal: spacing.xs, fontVariant: ['tabular-nums'] }} />
+          style={{ backgroundColor: colors.surface, fontSize: typography.display }} contentStyle={{ ...faces.semibold, paddingHorizontal: spacing.xs, fontVariant: ['tabular-nums'] }} />
       </View>
       {error === 'amount' && <AppText accessibilityRole="alert">{t.amountError}</AppText>}
       <SegmentedButtons value={kind} onValueChange={value => { setKind(value); setCategoryId(defaultCategory(snapshot!, value)); setDirty(true); }}

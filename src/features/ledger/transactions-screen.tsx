@@ -6,8 +6,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePreferences } from '@/features/preferences/provider';
 import { AppText } from '@/components/app-text';
-import { ActionButton } from '@/components/action-button';
-import { layout, spacing } from '@/theme/tokens';
+import { layout, spacing, radius, visual } from '@/theme/tokens';
 import { useLedger } from './provider';
 import { LedgerStatus } from './status';
 import { RecordItem } from './record-item';
@@ -33,12 +32,11 @@ export default function TransactionsScreen() {
   }
   return <FlatList data={rows} keyExtractor={row => row.id} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
     style={{ flex: 1, backgroundColor: colors.background }}
-    contentContainerStyle={{ padding: spacing.lg, paddingBottom: Math.max(insets.bottom, spacing.lg), width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', flexGrow: 1 }}
+    contentContainerStyle={{ padding: visual.pagePadding, paddingBottom: Math.max(insets.bottom, spacing.xl), width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', flexGrow: 1 }}
     refreshing={loading && !!snapshot} onRefresh={() => { void refresh(); }}
     ListHeaderComponent={<View style={{ gap: spacing.md }}>
-      <ActionButton title={t.add} icon="plus" disabled={!snapshot} onPress={() => router.push('/entry')} />
       <LedgerStatus />
-      <Searchbar accessibilityLabel={t.searchTransactions} placeholder={t.searchTransactions} value={filters.query} onChangeText={query => setFilters(previous => ({ ...previous, query }))} maxLength={160} />
+      <Searchbar style={{ backgroundColor: colors.surface, borderRadius: radius.md }} accessibilityLabel={t.searchTransactions} placeholder={t.searchTransactions} value={filters.query} onChangeText={query => setFilters(previous => ({ ...previous, query }))} maxLength={160} />
       <SegmentedButtons value={filters.kind} onValueChange={value => setFilters(previous => ({ ...previous, kind: value as TransactionFilters['kind'], categoryId: value !== 'all' && snapshot?.categories.find(item => item.id === previous.categoryId)?.kind !== value ? '' : previous.categoryId }))} buttons={[{ value: 'all', label: t.all }, { value: 'expense', label: t.expense }, { value: 'income', label: t.income }]} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
         <Button icon="filter-variant" accessibilityLabel={t.filters} accessibilityState={{ expanded }} onPress={() => { Keyboard.dismiss(); setExpanded(value => !value); }}>{t.filters}{filterCount ? ` (${filterCount})` : ''}</Button>
@@ -50,10 +48,11 @@ export default function TransactionsScreen() {
         {picker('categoryId', t.category, snapshot.categories.filter(category => filters.kind === 'all' || category.kind === filters.kind).map(category => ({ value: category.id, label: `${entityName(category, preferences.language)} · ${t[category.kind]}${category.archived ? ` · ${t.archived}` : ''}` })))}
       </View>}
       {snapshot && <AppText muted variant="caption" accessibilityLiveRegion="polite">{rows.length} {t.searchResults}</AppText>}
+      <Button icon="plus" accessibilityLabel={t.add} disabled={!snapshot} onPress={() => router.push('/entry')}>{t.add}</Button>
     </View>}
     ListEmptyComponent={snapshot ? <View style={{ gap: spacing.sm, paddingVertical: spacing.lg }}><AppText>{snapshot.records.length ? t.noMatches : t.noTransactions}</AppText><AppText muted>{snapshot.records.length ? t.noMatchesBody : t.noTransactionsBody}</AppText></View> : null}
     renderItem={({ item, index }) => <View>
-      {(index === 0 || rows[index - 1].occurred_on !== item.occurred_on) && <AppText variant="heading" style={{ paddingTop: spacing.lg }}>{item.occurred_on}</AppText>}
-      <RecordItem row={item} />
+      {(index === 0 || rows[index - 1].occurred_on !== item.occurred_on) && <AppText variant="caption" weight="medium" muted style={{ paddingTop: spacing.lg, paddingBottom: spacing.sm }}>{new Intl.DateTimeFormat(preferences.language, { weekday: 'short', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${item.occurred_on}T12:00:00Z`))}</AppText>}
+      <View style={{ backgroundColor: colors.surface, paddingHorizontal: spacing.md, borderTopLeftRadius: index === 0 || rows[index - 1].occurred_on !== item.occurred_on ? radius.lg : 0, borderTopRightRadius: index === 0 || rows[index - 1].occurred_on !== item.occurred_on ? radius.lg : 0, borderBottomLeftRadius: index === rows.length - 1 || rows[index + 1].occurred_on !== item.occurred_on ? radius.lg : 0, borderBottomRightRadius: index === rows.length - 1 || rows[index + 1].occurred_on !== item.occurred_on ? radius.lg : 0 }}><RecordItem row={item} /></View>
     </View>} />;
 }

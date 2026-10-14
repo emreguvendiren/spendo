@@ -1,3 +1,4 @@
+import { MoneyInput } from '@/components/money-input';
 import { useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
@@ -9,6 +10,8 @@ import { LedgerError } from '@/db/ledger';
 import { amountText, Currency, currencyDigits, money, parseAmount } from '@/domain/money';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
+import { Panel } from '@/components/panel';
 import { ActionButton } from '@/components/action-button';
 import { useLedger } from '@/features/ledger/provider';
 import { LedgerStatus } from '@/features/ledger/status';
@@ -55,22 +58,26 @@ function GoalForm({ goalId }: { goalId?: string }) {
   }
   if (goalId && !original) return <Screen><AppText accessibilityRole="alert">{t.goalUnavailable}</AppText></Screen>;
   if (done) return <Screen><AppText accessibilityRole="alert">{removed ? t.goalRemoved : t.goalSaved}</AppText><LedgerStatus showUndo={false} /><ActionButton title={t.goals} onPress={() => router.replace('/goals')} /></Screen>;
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen>
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen form>
     <LedgerStatus showUndo={false} />
+    <FeatureIntro icon="bullseye-arrow" title={t.goalDetails} />
     <TextInput mode="outlined" label={t.goalName} accessibilityLabel={t.goalName} value={name} maxLength={80} editable={!busy} error={error === 'name'} onChangeText={value => { setName(value); setDirty(true); setError(null); }} />
     {error === 'name' && <AppText accessibilityRole="alert">{t.goalNameError}</AppText>}
     {original ? <AppText muted>{currency}</AppText> : <View style={{ gap: spacing.sm }}><AppText>{t.currency}</AppText><Host matchContents colorScheme={isDark ? 'dark' : 'light'} seedColor={colors.accent} style={{ minHeight: layout.touchTarget }}><Picker testID="goal-currency" selectedValue={currency} enabled={!busy} onValueChange={value => { setCurrency(value); setDirty(true); }}>
       {(Object.keys(currencyDigits) as Currency[]).map(code => <Picker.Item key={code} value={code} label={code} />)}
     </Picker></Host></View>}
-    <TextInput mode="outlined" label={`${t.goalTarget} · ${currency}`} accessibilityLabel={t.goalTarget} value={target} maxLength={40} editable={!busy} keyboardType="decimal-pad" error={error === 'amount'} onChangeText={value => { setTarget(value); setDirty(true); setError(null); }} />
+    <MoneyInput mode="outlined" label={`${t.goalTarget} · ${currency}`} accessibilityLabel={t.goalTarget} value={target} maxLength={40} editable={!busy} keyboardType="decimal-pad" error={error === 'amount'} onChangeText={value => { setTarget(value); setDirty(true); setError(null); }} />
     {error === 'amount' && <AppText accessibilityRole="alert">{t.amountError}</AppText>}
     <ActionButton title={busy ? t.saving : t.save} busy={busy} onPress={submitGoal} />
-    <AppText muted>{t.goalHelp}</AppText>
+    <AppText muted variant="caption">{t.goalHelp}</AppText>
     {original && <>
+      <Panel style={{ backgroundColor: colors.background }}>
+      <FeatureIntro icon="piggy-bank-outline" title={t.contributionDetails} />
       <GoalProgress goal={original} />
-      <TextInput mode="outlined" label={`${t.goalContribution} · ${currency}`} accessibilityLabel={t.goalContribution} value={contribution} maxLength={40} editable={!busy && !dirty} keyboardType="decimal-pad" error={error === 'contribution'} onChangeText={value => { setContribution(value); setError(null); setNotice(false); }} />
+      <MoneyInput mode="outlined" label={`${t.goalContribution} · ${currency}`} accessibilityLabel={t.goalContribution} value={contribution} maxLength={40} editable={!busy && !dirty} keyboardType="decimal-pad" error={error === 'contribution'} onChangeText={value => { setContribution(value); setError(null); setNotice(false); }} />
       {error === 'contribution' && <AppText accessibilityRole="alert">{t.amountError}</AppText>}
       <ActionButton title={t.addContribution} secondary busy={busy} disabled={dirty} onPress={contribute} />
+      </Panel>
       {notice && <AppText accessibilityRole="alert">{t.contributionSaved}</AppText>}
       <AppText variant="heading">{t.recentContributions}</AppText>
       {(snapshot!.contributions ?? []).filter(item => item.goal_id === id).slice(0, 5).map(item => <View key={item.id} style={{ gap: spacing.sm }}><AppText>{displayAmount({ minor: item.minor, currency }, preferences.language)} · {item.occurred_on}</AppText><Button accessibilityLabel={`${t.removeContribution}: ${displayAmount({ minor: item.minor, currency }, preferences.language)}, ${item.occurred_on}`} disabled={busy || dirty} onPress={() => Alert.alert(t.removeContribution, t.removeContributionBody, [{ text: t.cancel, style: 'cancel' }, { text: t.removeContribution, style: 'destructive', onPress: () => { void perform(() => removeContribution(item), () => setNotice(false)); } }])}>{t.removeContribution}</Button></View>)}

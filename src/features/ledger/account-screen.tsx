@@ -1,3 +1,4 @@
+import { MoneyInput } from '@/components/money-input';
 import { useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { TextInput } from 'react-native-paper';
@@ -9,6 +10,7 @@ import { Account, LedgerError } from '@/db/ledger';
 import { Currency, currencyDigits } from '@/domain/money';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
 import { ActionButton } from '@/components/action-button';
 import { ArchiveButton } from '@/components/archive-button';
 import { layout, spacing } from '@/theme/tokens';
@@ -67,8 +69,9 @@ function AccountForm({ accountId }: { accountId?: string }) {
   }
   if (accountId && !initial) return <Screen><AppText accessibilityRole="alert">{t.accountUnavailable}</AppText></Screen>;
   if (done) return <Screen><AppText accessibilityRole="alert">{t.accountSaved}</AppText><LedgerStatus /><ActionButton title={t.accounts} onPress={() => router.replace('/accounts')} /></Screen>;
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen>
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen form>
     <DemoNotice />
+    <FeatureIntro icon="wallet-outline" title={initial ? t.renameAccount : t.addAccount} body={t.accountsIntro} />
     <TextInput mode="outlined" accessibilityLabel={t.accountName} label={t.accountName} value={name} maxLength={80} editable={!busy} error={error === 'name'}
       onChangeText={value => { setName(value); setDirty(true); setError(null); }} />
     {error === 'name' && <AppText accessibilityRole="alert">{t.accountNameError}</AppText>}
@@ -87,7 +90,7 @@ function AccountForm({ accountId }: { accountId?: string }) {
           </Picker>
         </Host>
       </View>
-      <TextInput mode="outlined" label={`${t.opening} · ${currency}`} accessibilityLabel={t.opening} value={opening} keyboardType="numbers-and-punctuation" editable={!busy} maxLength={40} error={error === 'amount'}
+      <MoneyInput mode="outlined" label={`${t.opening} · ${currency}`} accessibilityLabel={t.opening} value={opening} keyboardType="numbers-and-punctuation" editable={!busy} maxLength={40} error={error === 'amount'}
         onChangeText={value => { setOpening(value); setDirty(true); setError(null); }} />
       <AppText muted variant="caption">{t.openingHelp} · {day}</AppText>
     </>}

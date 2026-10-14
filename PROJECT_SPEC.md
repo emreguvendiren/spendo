@@ -1,6 +1,6 @@
 # Spendo — ürün ve teknik sözleşme
 
-Durum: Faz 1 temel gelir/gider, liste/düzenleme/silme, hesap/kategori yönetimi/arşiv-geri açma ve atomik transfer oluşturma/geçmiş transfer düzenleme-silme uygulandı; SQLite v6, gelir/gider şablonları, birikim hedefleri/katkıları, kategori aylık bütçesi, bağlantılı transfer komisyonu ve binlik para gösterimi otomatik kontrolleri geçti. Başlangıç bakiyesi düzeltmesi ve aylık/kategori Raporlar da uygulandı. Kullanıcı önceliği ana fonksiyonlar: İşlemler arama/filtre de bağlı; hızlı şablonlar da bağlı; sırada Ana Sayfa özet/kısayolları; transfer/komisyon/iade ayrıntıları ertelendi. Native cihaz kabulü, fiziksel hesap/kategori silme ve iade açık.
+Durum: Faz 1 temel gelir/gider, liste/düzenleme/silme, hesap/kategori yönetimi/arşiv-geri açma ve atomik transfer oluşturma/geçmiş transfer düzenleme-silme uygulandı; SQLite v6, gelir/gider şablonları, birikim hedefleri/katkıları, kategori aylık bütçesi, bağlantılı transfer komisyonu ve binlik para gösterimi otomatik kontrolleri geçti. Başlangıç bakiyesi düzeltmesi ve aylık/kategori Raporlar da uygulandı. Kullanıcı önceliği ana fonksiyonlar: İşlemler arama/filtre de bağlı; hızlı şablonlar da bağlı; Ana Sayfa bütçe/hedef/şablon özetleri de bağlı; sırada aylık tekrarlayan planlar; transfer/komisyon/iade ayrıntıları ertelendi. Native cihaz kabulü, fiziksel hesap/kategori silme ve iade açık.
 Tarih: 14 Ekim 2026, Europe/Istanbul.
 Bu dosya projenin kalıcı kapsamını tanımlar. Gerçek ilerleme `docs/PROGRESS.md`, görsel kurallar `docs/DESIGN.md`, geliştirici talimatları `AGENTS.md` içindedir.
 
@@ -174,3 +174,5 @@ Kaynaklar araştırma dayanağıdır; kurulum sırasında güncel sürümler yen
 - https://docs.expo.dev/skills/ ve https://github.com/expo/skills — Expo'nun beceri kaynağı.
 - Kurulu beceriler: `expo-design-system`, `expo-native-ui`; `.agents/skills/` altında tam destek dosyalarıyla alındı. 14 Ekim 2026 kaynak commit'i ve kullanım sınırları `docs/SKILLS.md` içinde. Kullanıcının isteğiyle kuruldu; proje tasarım kurallarının yerine geçmez. Web landing page odaklı beceriler mobil UI temeli olarak kullanılmaz.
 - Aynı kaynaktan eklenen tamamlayıcılar: expo-project-structure, expo-router, expo-ui, expo-data-fetching, expo-dev-client, expo-module, expo-animation. Toplam 9 beceri; sürümler ve kullanım sınırları docs/SKILLS.md içinde.
+
+- 2026-10-14: Ana Sayfa güncel ayın en fazla üç bütçesini (aşım önce, currency ayrı), iki hedefini (tamamlanmamış önce) ve üç kullanılabilir şablonunu (ad sırası) snapshot üzerinden özetler. Kullanım sıklığı takibi veya yeni finansal kayıt üretmez; kısayol yeni form taslağıdır. Hesap taşması bölüm bazında açık hata gösterir. Yeni migration/seed yok. Cihaz kabulü docs/HOME_QA.md; sonraki ana iş aylık tekrarlayan gelir/gider planları.

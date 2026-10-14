@@ -1,6 +1,6 @@
+import { MoneyInput } from '@/components/money-input';
 import { useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput } from 'react-native-paper';
 import { randomUUID } from 'expo-crypto';
 import { useNavigation, useRouter } from 'expo-router';
 import { useHeaderHeight, usePreventRemove } from 'expo-router/react-navigation';
@@ -8,6 +8,7 @@ import { LedgerError } from '@/db/ledger';
 import { amountText, money } from '@/domain/money';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
 import { ActionButton } from '@/components/action-button';
 import { usePreferences } from '@/features/preferences/provider';
 import { useLedger } from './provider';
@@ -56,11 +57,12 @@ function OpeningForm({ accountId }: { accountId?: string }) {
   if (!account) return <Screen><AppText accessibilityRole="alert">{t.accountUnavailable}</AppText></Screen>;
   if (account.archived && !original) return <Screen><AppText accessibilityRole="alert">{t.openingRestoreRequired}</AppText><ActionButton title={t.accounts} onPress={() => router.replace('/accounts')} /></Screen>;
   if (done) return <Screen><AppText accessibilityRole="alert">{t.openingSaved}</AppText><LedgerStatus showUndo={false} /><ActionButton title={t.accounts} onPress={() => router.replace('/accounts')} /></Screen>;
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen>
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen form>
     <DemoNotice />
+    <FeatureIntro icon="wallet-plus-outline" title={t.editOpening} />
     <AppText weight="medium">{entityName(account, preferences.language)} · {account.currency}</AppText>
     <AppText muted>{t.openingCorrectionHelp}</AppText>
-    <TextInput mode="outlined" label={`${t.opening} · ${account.currency}`} accessibilityLabel={t.opening} value={amount} keyboardType="numbers-and-punctuation" editable={!busy} maxLength={40} error={error === 'amount'} onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} />
+    <MoneyInput mode="outlined" label={`${t.opening} · ${account.currency}`} accessibilityLabel={t.opening} value={amount} keyboardType="numbers-and-punctuation" editable={!busy} maxLength={40} error={error === 'amount'} onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} />
     <AppText muted>{t.date} · {day}</AppText>
     {error && <AppText accessibilityRole="alert">{error === 'amount' ? t.openingError : error === 'conflict' ? t.editConflict : t.entryError}</AppText>}
     <ActionButton title={busy ? t.saving : t.save} busy={busy} onPress={() => { void submit(); }} />

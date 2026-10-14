@@ -1,6 +1,7 @@
+import { MoneyInput } from '@/components/money-input';
 import { useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, View } from 'react-native';
-import { Button, TextInput } from 'react-native-paper';
+import { Button } from 'react-native-paper';
 import { Host, Picker } from '@expo/ui';
 import { useNavigation, useRouter } from 'expo-router';
 import { useHeaderHeight, usePreventRemove } from 'expo-router/react-navigation';
@@ -8,6 +9,7 @@ import { LedgerError, validateMonth } from '@/db/ledger';
 import { amountText, Currency, currencyDigits, money, parseAmount } from '@/domain/money';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
 import { ActionButton } from '@/components/action-button';
 import { usePreferences } from '@/features/preferences/provider';
 import { useLedger } from '@/features/ledger/provider';
@@ -59,9 +61,10 @@ function BudgetForm({ month, currency, categoryId }: { month: string; currency: 
   if (done) return <Screen><AppText accessibilityRole="alert">{removed ? t.budgetRemoved : t.budgetSaved}</AppText><LedgerStatus showUndo={false} /><ActionButton title={t.reports} onPress={() => router.back()} /></Screen>;
   if (!original && !snapshot!.categories.some(item => item.kind === 'expense' && !item.archived)) return <Screen><AppText>{t.noCategories}</AppText><ActionButton title={t.categories} onPress={() => router.push('/categories')} /></Screen>;
   const label = new Intl.DateTimeFormat(preferences.language, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-15T12:00:00Z`));
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen>
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen form>
+    <FeatureIntro icon="chart-arc" title={t.budgetDetails} />
     <AppText variant="heading">{label} · {currency}</AppText>
-    <AppText muted>{t.budgetHelp}</AppText>
+    <AppText muted variant="caption">{t.budgetHelp}</AppText>
     <View style={{ gap: spacing.sm }}><AppText>{t.category}</AppText>
       <Host matchContents colorScheme={isDark ? 'dark' : 'light'} seedColor={colors.accent} style={{ minHeight: layout.touchTarget }}>
         <Picker testID="budget-category" selectedValue={category} enabled={!busy && !original} onValueChange={value => { setCategory(value); setDirty(true); setError(null); }}>
@@ -69,7 +72,7 @@ function BudgetForm({ month, currency, categoryId }: { month: string; currency: 
         </Picker>
       </Host>
     </View>
-    <TextInput mode="outlined" label={`${t.budgetLimit} · ${currency}`} accessibilityLabel={t.budgetLimit} value={amount} maxLength={40} editable={!busy} keyboardType="decimal-pad" error={error === 'amount'} onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} />
+    <MoneyInput mode="outlined" label={`${t.budgetLimit} · ${currency}`} accessibilityLabel={t.budgetLimit} value={amount} maxLength={40} editable={!busy} keyboardType="decimal-pad" error={error === 'amount'} onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} />
     {error && <AppText accessibilityRole="alert">{error === 'amount' ? t.amountError : error === 'conflict' ? t.budgetConflict : t.entryError}</AppText>}
     <ActionButton title={busy ? t.saving : t.save} busy={busy} onPress={() => { void submit(); }} />
     {original && <Button accessibilityLabel={t.removeBudget} icon="trash-can-outline" textColor={colors.expense} disabled={busy} onPress={() => Alert.alert(t.removeBudget, t.removeBudgetBody, [{ text: t.cancel, style: 'cancel' }, { text: t.removeBudget, style: 'destructive', onPress: () => { void remove(); } }])}>{t.removeBudget}</Button>}

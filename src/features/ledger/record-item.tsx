@@ -23,9 +23,9 @@ export function RecordItem({ row }: { row: RecordRow }) {
   return <Pressable accessibilityRole={editable ? 'button' : undefined} disabled={!editable}
     accessibilityLabel={editable ? `${transfer || feeLink ? t.editTransfer : t.editRecord}: ${feeLink ? t.transferFee : row.note || t[row.kind]}, ${amountLabel}, ${row.occurred_on}` : undefined}
     onPress={() => router.push({ pathname: transfer || feeLink ? '/transfer' : '/entry', params: { id: feeLink?.transfer_id ?? row.id } })}
-    style={({ pressed }) => ({ backgroundColor: pressed ? colors.surface : colors.background, minHeight: layout.touchTarget, flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start', paddingVertical: spacing.md, borderBottomWidth: controls.borderWidth, borderColor: colors.separator })}>
-    <View style={{ width: layout.iconBadge, height: layout.iconBadge, alignItems: 'center', justifyContent: 'center', backgroundColor: income ? colors.incomeTint : colors.surface, borderRadius: radius.md }}>
-      <Icon source={icon} size={layout.icon} color={income ? colors.income : colors.muted} />
+    style={({ pressed }) => ({ backgroundColor: pressed ? colors.tint : colors.surface, minHeight: layout.touchTarget, flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start', paddingVertical: spacing.md, borderBottomWidth: controls.borderWidth, borderColor: colors.separator })}>
+    <View style={{ width: layout.iconBadge, height: layout.iconBadge, alignItems: 'center', justifyContent: 'center', backgroundColor: income ? colors.incomeTint : colors.tint, borderRadius: radius.md }}>
+      <Icon source={icon} size={layout.icon} color={income ? colors.income : colors.accent} />
     </View>
     <View style={{ flex: 1, gap: spacing.xs }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm }}>

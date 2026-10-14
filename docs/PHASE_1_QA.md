@@ -20,3 +20,4 @@ Durum: 14 Ekim 2026, hızlı şablon artımından sonra tip/lint ve 313 test ge�
 Otomatik testler disk/açılış/seed/yazma/yenileme/geri alma hatalarını kontrollü olarak sınar; gerçek cihazda hata enjeksiyonu yapılmadı. UI testleri native picker ve navigasyon sınırlarını mock eder; görsel/native etkileşim kabulünün yerine geçmez.
 
 Açık kapsam: fiziksel hesap/kategori silme, iade ekranları, kurla raporlama, büyük veri için DB sayfalaması ve performans ölçümü. Arşivleme/geri açma artık var; cihaz adımları ARCHIVE_MONEY_QA.md içinde.
+Ana Sayfa bütçe/hedef/şablon özetleri eklendi. Güncel otomatik kontrol: 18 suite / 319 test, typecheck/lint ve iki platform Hermes export başarılı. Cihaz kabulü docs/HOME_QA.md listesindeki güncelleme, doğru route, kaydetmeden kayıt oluşturmama, currency/boş durum ve erişilebilirlik adımlarıyla ayrıca yapılmalıdır.

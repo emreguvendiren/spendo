@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Icon, Text } from 'react-native-paper';
 import { usePreferences } from '@/features/preferences/provider';
-import { bottomBar, controls, layout, spacing, typography } from '@/theme/tokens';
+import { bottomBar, controls, layout, spacing, typography, radius } from '@/theme/tokens';
 
 export type BottomBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -26,7 +26,7 @@ export function BottomBar({ state, descriptors, navigation, insets }: BottomBarP
             }}
             onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
             style={({ pressed }) => ({ flex: 1, minHeight: bottomBar.itemMinHeight, minWidth: layout.touchTarget, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm, gap: spacing.xs, alignItems: 'center', justifyContent: 'center', opacity: pressed ? controls.pressedOpacity : 1 })}>
-            {options.tabBarIcon?.({ focused: selected, color, size: layout.icon })}
+            <View style={{ minWidth: layout.touchTarget, alignItems: 'center', paddingVertical: spacing.xs, borderRadius: radius.md, backgroundColor: selected ? colors.tint : colors.surface }}>{options.tabBarIcon?.({ focused: selected, color, size: layout.icon })}</View>
             <Text style={{ fontSize: typography.caption, color, textAlign: 'center' }}>{label}</Text>
           </Pressable>
           {route.name === 'transactions' && <View style={{ flex: 1, alignItems: 'center', marginTop: -bottomBar.actionLift }}>

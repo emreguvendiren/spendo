@@ -7,6 +7,7 @@ import { useHeaderHeight, usePreventRemove } from 'expo-router/react-navigation'
 import { LedgerError } from '@/db/ledger';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
 import { ActionButton } from '@/components/action-button';
 import { ArchiveButton } from '@/components/archive-button';
 import { usePreferences } from '@/features/preferences/provider';
@@ -58,8 +59,9 @@ function CategoryForm({ categoryId }: { categoryId?: string }) {
   }
   if (categoryId && !initial) return <Screen><AppText accessibilityRole="alert">{t.categoryUnavailable}</AppText></Screen>;
   if (done) return <Screen><AppText accessibilityRole="alert">{t.categorySaved}</AppText><LedgerStatus /><ActionButton title={t.categories} onPress={() => router.replace('/categories')} /></Screen>;
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen>
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen form>
     <DemoNotice />
+    <FeatureIntro icon="shape-outline" title={initial ? t.renameCategory : t.addCategory} body={t.categoriesIntro} />
     <TextInput mode="outlined" accessibilityLabel={t.categoryName} label={t.categoryName} value={name} maxLength={80} editable={!busy} error={error === 'name'} onChangeText={value => { setName(value); setDirty(true); setError(null); }} />
     {initial ? <AppText muted>{t.categoryKindFixed} · {t[kind]}</AppText> : <SegmentedButtons value={kind} onValueChange={value => { setKind(value); setDirty(true); }} buttons={[{ value: 'expense', label: t.expense, disabled: busy }, { value: 'income', label: t.income, disabled: busy }]} />}
     {error && <AppText accessibilityRole="alert">{error === 'name' ? t.categoryNameError : error === 'last-active' ? t.lastCategoryError : error === 'conflict' ? t.editConflict : t.entryError}</AppText>}

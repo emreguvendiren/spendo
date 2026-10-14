@@ -1,7 +1,7 @@
 # Spendo — canlı ilerleme ve devralma kaydı
 
 Son güncelleme: 14 Ekim 2026 (Europe/Istanbul).
-Aktif öncelik: Ana fonksiyonlar — gelir/gider, temel Raporlar ve aylık bütçe bağlı; birikim hedefleri de bağlı; İşlemler arama/filtre de bağlı; hızlı kayıt şablonları da bağlı; sırada Ana Sayfa özet/kısayolları. Komisyon/havale/iade ayrıntıları kullanıcı isteğiyle ertelendi. Native cihaz kabulü bekliyor.
+Aktif öncelik: Ana fonksiyonlar — gelir/gider, temel Raporlar ve aylık bütçe bağlı; birikim hedefleri de bağlı; İşlemler arama/filtre de bağlı; hızlı kayıt şablonları da bağlı; Ana Sayfa bütçe/hedef/şablon özetleri de bağlı; sırada aylık tekrarlayan kayıt planları. Komisyon/havale/iade ayrıntıları kullanıcı isteğiyle ertelendi. Native cihaz kabulü bekliyor.
 
 ## Gerçek mevcut durum
 - Başlangıçta klasörde yalnızca `logo.png` vardı. Logo görsel olarak incelendi.
@@ -25,7 +25,7 @@ Aktif öncelik: Ana fonksiyonlar — gelir/gider, temel Raporlar ve aylık büt�
 ## Kontrol sonuçları
 - Dosya listesi ve logo incelendi; ortam sürümleri okundu.
 - Resmi OpenAI, Expo, Apple ve Android kaynakları araştırıldı; asistan yetenekleri uygulanmış değil.
-- `npm run check` — güncel son çalıştırma: typecheck ve lint başarılı, 17 suite / 313 test geçti. Snapshot yok. Önceki artımların sonuçları aşağıdaki tarihsel kayıtlarda.
+- `npm run check` — güncel son çalıştırma: typecheck ve lint başarılı, 18 suite / 319 test geçti. Snapshot yok. Önceki artımların sonuçları aşağıdaki tarihsel kayıtlarda.
 - `npx expo export --platform ios --platform android` — sandbox ilk denemesinde spawn EPERM; izinli tekrarında Android/iOS Hermes bundle başarılı. dist/ çıktı ignored; imzalı build/cihaz testi değildir.
 - `npx expo install --check` — ağ erişimli doğrulamada Dependencies are up to date.
 - `npm audit fix` uyumlu düzeltmeler denendi; kalan audit 65 bulgu (49 high, 16 moderate). docs/dependency-audit.json ham rapor. Major yükseltme/downgrade ile rastgele çözüm uygulanmadı. test-renderer React peer uyarısı da mevcut, testler geçti; üretim öncesi değerlendirme açık.
@@ -35,7 +35,7 @@ Aktif öncelik: Ana fonksiyonlar — gelir/gider, temel Raporlar ve aylık büt�
 
 ## Somut sonraki adım
 1. `docs/UI_LIBRARY.md` ve `docs/PHASE_1_QA.md` ile iPhone'da Paper tasarım revizyonunu ve kayıt/liste/geri alma/yeniden açılış akışını dene; gözlenen hataları düzelt. Expo Go'da Reload ile mevcut 8083 sunucusundan yeni kod alınabilir. Kullanıcının tasarım geri bildirimini önceliklendir.
-2. Ana fonksiyonları tamamla: TEMPLATES_QA ve mevcut QA listeleriyle cihazda dene; ardından Ana Sayfa bütçe/hedef ilerleme ve hızlı şablon kısayolları. Sonrasında aylık tekrarlayan kayıt planları. Komisyon/havale/iade ayrıntıları ertelendi; snapshot sayfalama/perf sınırı açık.
+2. Ana fonksiyonları tamamla: TEMPLATES_QA ve mevcut QA listeleriyle cihazda dene; HOME_QA ile Ana Sayfa özetlerini de dene; ardından aylık tekrarlayan gelir/gider planları. Komisyon/havale/iade ayrıntıları ertelendi; snapshot sayfalama/perf sınırı açık.
 3. `docs/PHASE_0_QA.md` ayrıntılı dil/tema/erişilebilirlik/büyük yazı kontrollerini iPhone'da, erişildiğinde Android'de tamamla. Genel çalışıyor bildirimi tüm test matrisinin kabulü sayılmadı.
 4. Her artımda ilgili testleri ve tip/lint kontrolünü geçir; yerel kayıtları cihazda yeniden açılış ve offline akışla doğrula.
 5. Bağımlılık güvenlik raporunu SDK uyumunu bozmadan ele al; üretim yayınına taşımadan önce açık riskleri çöz/değerlendir.
@@ -275,11 +275,20 @@ Aktif öncelik: Ana fonksiyonlar — gelir/gider, temel Raporlar ve aylık büt�
 - Yeni src/features/templates/model.ts, model.test.ts, templates-screen.tsx; src/app/templates.tsx/template.tsx, src/app/entry.tsx ve _layout.tsx. Ana Sayfa eylemi ve ortak entry-screen.tsx templateMode: name + aynı income/expense/account/category/amount/note kontrolleri, tarihsiz editor, onayla kaldırma. Kullan bugünkü yeni UUID/manual kayıt taslağını doldurur; kullanıcı Kaydetmedikçe işlem yok. Arşivli veya missing preset açıkça bloklanır, fallback yapılmaz; eski kendi referansları editor'de korunur. Draft/busy/retry/commit-refresh failure davranışları ve TR/EN messages.ts.
 - src/db/demo.ts/open.ts seed v5: maaş/kira/kahve üç örnek şablon; edit/delete korunur, mevcut finansal seed değişmez. Üretim örnek almaz.
 - tests/ledger.test.ts, tests/entry.test.tsx, tests/open-ledger.test.ts ve templates/model.test.ts: 11 yeni test; metadata CRUD/validation/reference/stale/deleted, migration rollback/retry, demo koruma; model draft/usable; UI validation/retry, new ID/today/preset değişmezliği, list route/archived/missing, remove confirm ve EN-dark pending/refresh. Dosyalı SQLite yeniden açılışı şablon kalıcılığıyla genişletildi.
-- `npm run check` — TypeScript/ESLint başarılı; **17 suite / 313 test geçti**. Node SQLite experimental uyarısı bekleniyor. npx expo export --platform ios --platform android — izinli çalıştırmada iki Hermes bundle başarılı, Inter dahil 41 asset. dist ignored; native cihaz kabulü/imzalı build değildir. git -c core.safecrlf=false diff --check — başarılı.
+- `npm run check` — TypeScript/ESLint başarılı; **18 suite / 319 test geçti**. Node SQLite experimental uyarısı bekleniyor. npx expo export --platform ios --platform android — izinli çalıştırmada iki Hermes bundle başarılı, Inter dahil 41 asset. dist ignored; native cihaz kabulü/imzalı build değildir. git -c core.safecrlf=false diff --check — başarılı.
 - Belgeler: yeni TEMPLATES_QA.md; PROJECT_SPEC karar/durum, DESIGN, DEVELOPMENT_DATA, README, PHASE_1_QA ve canlı ilerleme/sonraki adım güncellendi.
 - Çalıştırılmayanlar: gerçek v5→v6 native SQLite/picker/klavye/gesture/VoiceOver/TalkBack/büyük yazı/offline soğuk açılış, screenshot, imzalı build ve audit. Native kabul/snapshot sayfalama sınırı açık. Otomatik tekrar/zamanlama ve mevcut kaydı tek eylemle şablona dönüştürme bu artımda yok.
 - Somut sonraki adım: TEMPLATES_QA cihaz geri bildirimi; ardından Ana Sayfa'da bütçe/hedef ilerleme ve sık kullanılan şablon kısayollarını özetleyerek ana deneyimi tamamla. Sonrasında kullanıcı seçimiyle aylık tekrarlayan kayıt planları; finansal ayrıntılara dönme.
 
+### Günlük kullanım / Ana Sayfa özetleri — 14 Ekim 2026
+- Başlangıç AGENTS/PROJECT_SPEC/DESIGN/PROGRESS ve UI_LIBRARY gerçek kaynak/Git ile karşılaştırıldı. Expo design-system/native-ui yönergeleri merkezi Paper/Inter/token sistemiyle uygulandı.
+- Yeni src/features/overview/home-model.ts ve home-sections.tsx; ledger/home-screen.tsx, theme/tokens.ts, i18n/messages.ts: güncel ay en fazla üç bütçe (aşım önce, currency ayrı), iki hedef (tamamlanmamış önce), üç kullanılabilir şablon (ad sırası). Satırlar doğru bütçe/hedef editor ve yeni kayıt taslağına gider; başlıklar bütün listeye gider. Şablon kullanımı tek başına kayıt yazmaz. Snapshot yenilenince özet değişir; boş durumlar ve bölüm bazlı hesap hatası ayrıdır. Kullanım sıklığı takibi yok.
+- home-model.test.ts ve tests/entry.test.tsx: altı yeni test; dönem/currency/limit/sıralama, void/deleted/archived, snapshot değişmezliği, overflow izolasyonu, navigation/no-write, gider/katkı refresh ve boş bölüm erişimi.
+- npm run check — TypeScript/ESLint başarılı; 18 suite / 319 test geçti. İlk UI testinde 95,50 beklentisine karşı 95,00 fixture düzeltilip kontroller yeniden geçirildi. Node SQLite experimental uyarısı bekleniyor.
+- npx expo export --platform ios --platform android — izinli çalıştırmada iki Hermes bundle başarılı; Inter dahil 41 asset. dist ignored; native cihaz testi veya imzalı build değildir. git -c core.safecrlf=false diff --check — başarılı.
+- Belgeler: yeni docs/HOME_QA.md; PROJECT_SPEC, DESIGN, README, PHASE_1_QA ve bu ilerleme kaydı güncellendi. Yeni DB migration/seed/paket/ağ yok; v6 ve 36 demo kayıt korunur.
+- Çalıştırılmayanlar: gerçek iPhone/Android native görsel, VoiceOver/TalkBack, büyük yazı, offline soğuk açılış, screenshot, imzalı build ve yeni audit. Native kabul ve snapshot sayfalama/perf açık.
+- Somut sonraki adım: HOME_QA cihaz geri bildirimi ve gözlenen hata düzeltmesi; ardından kullanıcının oluşturacağı aylık tekrarlayan gelir/gider planları. Komisyon/havale/iade ayrıntılarına dönme.
 ### Ortam kısıtları
 - Paket kurulumu ağ erişimi gerektirebilir; sandbox hatası olursa uygun komut için escalation kullan.
 - Global kurulum ve harici skill dosyalarının workspace dışına yazılması izin gerektirebilir. Kullanıcıya gerekçeyi açıkla; güvenlik sınırlarını aşma.

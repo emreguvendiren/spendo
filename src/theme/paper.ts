@@ -14,7 +14,7 @@ export function paperTheme(dark: boolean, faces: FontFaces = fontFaces): MD3Them
     primary: colors.accent, onPrimary: colors.onAccent, primaryContainer: colors.tint, onPrimaryContainer: colors.accent,
     secondaryContainer: colors.tint, onSecondaryContainer: colors.accent,
     background: colors.background, surface: colors.surface, onSurface: colors.text, onBackground: colors.text,
-    surfaceVariant: colors.background, onSurfaceVariant: colors.muted, outline: colors.separator, outlineVariant: colors.separator,
+    surfaceVariant: colors.background, onSurfaceVariant: colors.muted, outline: colors.muted, outlineVariant: colors.separator,
     error: colors.expense, errorContainer: colors.expenseTint, onErrorContainer: colors.expense,
     elevation: { ...base.colors.elevation, level0: 'transparent', level1: colors.surface, level2: colors.surface },
   } };

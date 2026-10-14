@@ -1,3 +1,4 @@
+import { MoneyInput } from '@/components/money-input';
 import { useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Button, List, TextInput } from 'react-native-paper';
@@ -10,6 +11,7 @@ import { amountText, money, MoneyError } from '@/domain/money';
 import { LedgerError, RecordRow } from '@/db/ledger';
 import { Screen } from '@/components/screen';
 import { AppText } from '@/components/app-text';
+import { FeatureIntro } from '@/components/feature-intro';
 import { ActionButton } from '@/components/action-button';
 import { layout, spacing } from '@/theme/tokens';
 import { usePreferences } from '@/features/preferences/provider';
@@ -103,16 +105,17 @@ function TransferForm({ initial }: { initial?: RecordRow }) {
       </Host>
     </View>;
   }
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen>
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={headerHeight}><Screen form>
     <DemoNotice />
+    <FeatureIntro icon="bank-transfer" title={t.transfer} />
     {accountPicker(t.sourceAccount, 'transfer-source', sourceId, setSourceId, original?.account_id)}
     {accountPicker(t.targetAccount, 'transfer-target', targetId, setTargetId, original?.target_id)}
     {error === 'accounts' && <AppText accessibilityRole="alert">{t.transferAccountError}</AppText>}
-    <TextInput mode="outlined" accessibilityLabel={t.sentAmount} label={`${t.sentAmount} · ${source?.currency}`} value={amount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'amount'} onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} />
-    {foreign && <TextInput mode="outlined" accessibilityLabel={t.receivedAmount} label={`${t.receivedAmount} · ${target?.currency}`} value={targetAmount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'amount'} onChangeText={value => { setTargetAmount(value); setDirty(true); setError(null); }} />}
+    <MoneyInput mode="outlined" accessibilityLabel={t.sentAmount} label={`${t.sentAmount} · ${source?.currency}`} value={amount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'amount'} onChangeText={value => { setAmount(value); setDirty(true); setError(null); }} />
+    {foreign && <MoneyInput mode="outlined" accessibilityLabel={t.receivedAmount} label={`${t.receivedAmount} · ${target?.currency}`} value={targetAmount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'amount'} onChangeText={value => { setTargetAmount(value); setDirty(true); setError(null); }} />}
     <AppText muted variant="caption">{foreign ? t.transferForeignHelp : t.transferSameHelp}</AppText>
     {error === 'amount' && <AppText accessibilityRole="alert">{t.amountError}</AppText>}
-    <TextInput mode="outlined" accessibilityLabel={t.transferFee} label={`${t.transferFee} · ${source?.currency}`} value={feeAmount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'fee'} onChangeText={value => { setFeeAmount(value); setDirty(true); setError(null); }} />
+    <MoneyInput mode="outlined" accessibilityLabel={t.transferFee} label={`${t.transferFee} · ${source?.currency}`} value={feeAmount} keyboardType="decimal-pad" maxLength={40} editable={!busy} error={error === 'fee'} onChangeText={value => { setFeeAmount(value); setDirty(true); setError(null); }} />
     <AppText muted variant="caption">{t.transferFeeHelp}</AppText>
     {!!feeAmount.trim() && <View style={{ gap: spacing.sm }}><AppText>{t.feeCategory}</AppText>
       <Host matchContents colorScheme={isDark ? 'dark' : 'light'} seedColor={colors.accent} style={{ minHeight: layout.touchTarget }}>

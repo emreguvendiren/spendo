@@ -21,4 +21,7 @@ test.each(['light', 'dark'] as const)('%s theme keeps normal text readable', mod
   expect(contrast(colors.income, colors.incomeTint)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.expense, colors.expenseTint)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(colors.income, colors.surface)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.onHero, colors.hero)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(colors.heroMuted, colors.hero)).toBeGreaterThanOrEqual(4.5);
+  for (const key of ['chart1', 'chart2', 'chart3', 'chart4', 'chart5', 'accent', 'income'] as const) expect(contrast(colors[key], colors.surface)).toBeGreaterThanOrEqual(3);
 });

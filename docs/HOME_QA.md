@@ -1,0 +1,13 @@
+# Ana Sayfa özetleri — cihaz kabulü
+
+Otomatik testler cihaz kabulü değildir. iPhone ve erişildiğinde Android'de aşağıdaki adımları uygula. Demo verilerini önceden değiştirdiysen beklenen tutarı kendi kayıtlarınla karşılaştır; Reload silinen örnekleri geri getirmez.
+
+1. Reload sonrası Ana Sayfa: aylık toplamların altında Bütçeler, Birikim hedefleri, Hızlı kayıt ve Son işlemler görünmeli. Güncel ayın en fazla üç bütçesi, iki hedef ve üç kullanılabilir şablonu gösterilir. TRY/USD ayrı kalmalı. Geçmiş ay bütçesi Ana Sayfa'da görünmez; Raporlar'dan erişilir.
+2. Değiştirilmemiş demo güncel ayındaysan Yemek bütçesi 1.500,00 TRY, harcanan 946,25 TRY, kalan 553,75 TRY; Ulaşım kalan 458,00 TRY; USD Genel kalan 9,01 USD. İlk seed ayı artık geçmişse güncel ay bütçesi oluştur. Bütçe satırına dokun: doğru kategori, ay ve currency ile editor açılmalı. Limiti harcamadan düşük yapıp kaydet; dönüşte Aşım yazısı ve dolu çubuk görünmeli, aşan bütçeler üstte yer almalı. Gider ekle/düzelt/sil; kalan yeniden hesaplanmalı.
+3. Acil durum hedefi değişmemişse biriken 2.500,00 TRY, hedef 10.000,00 TRY, kalan 7.500,00 TRY. Satıra dokunup katkı ekle; dönüşte biriken/kalan güncellenmeli. Hedefi tamamla: çubuk %100, tamamlandı metni; tamamlanmamış hedefler önce gösterilmeli. Katkı hesap bakiyesi ve aylık gideri değiştirmemeli.
+4. Kahve şablonuna dokun: bugünkü 95,50 TRY gider taslağı, doğru hesap/kategori/not açılmalı. Kaydetmeden geri çıkıp değişikliği bırak: işlem sayısı/toplam değişmemeli. Yeniden aç ve kaydet: yalnızca bir yeni kayıt oluşmalı. Şablonu düzenle veya kaldır; Ana Sayfa yeni snapshot ile güncellenmeli.
+5. Şablon hesabını veya kategorisini arşivle: kısayol Ana Sayfa'dan kalkmalı; Kayıt şablonları listesinden düzeltme/geri açma mümkün olmalı. Bütün şablonlar kullanılamazsa açıklama görünmeli. Bütçe/hedef/şablon başlığındaki Tümünü gör doğru Raporlar/hedefler/şablonlar ekranına gitmeli; boş bölümlerde de çalışmalı. Dörtten fazla kullanılabilir şablon ekle: ilk üç ad sırasıyla görünmeli; sıklık takibi yok.
+6. TR/EN, açık/koyu tema, küçük ekran ve büyük sistem yazısında ad/tutar/düğmeler kesilmemeli. EN 1,234.56, TR 1.234,56 biçimi korunmalı. VoiceOver/TalkBack satır adını, tutarları ve eylemi okumalı; dekoratif çubuk ikinci kez odak almamalı.
+7. İnterneti kapat, uygulamayı tamamen kapatıp aç: bütçe/hedef/şablon ve son değişiklikler korunmalı. Yeni kayıt offline eklenmeli ve dönüşte özet güncellenmeli. Yeni ayda önceki ay limiti otomatik kopyalanmamalı.
+
+Bu artım yeni DB migration/seed eklemez. Büyük veri performansı, native görsel/erişilebilirlik kabulü ve imzalı build ayrıca açıktır.

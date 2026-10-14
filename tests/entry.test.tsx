@@ -1181,7 +1181,7 @@ test('accounts list shows balance and exposes add and rename actions', async () 
   const fake = fakeLedger();
   await fake.api.post({ id: 'expense', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 1250, currency: 'TRY' }, occurredOn: localDay(), source: 'manual', note: '' });
   await render(<PreferencesProvider><LedgerProvider open={fake.open}><AccountsScreen /></LedgerProvider></PreferencesProvider>);
-  await waitFor(() => expect(screen.getByText('Nakit · -12,50 TRY')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('-12,50 TRY')).toBeTruthy());
   expect(screen.getByRole('button', { name: 'Hesap ekle' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Hesap adını düzenle: Nakit, -12,50 TRY' })).toBeTruthy();
 });
@@ -1461,4 +1461,38 @@ test('home shows real monthly expense and net with the entry action', async () =
   expect(screen.getByText('Aylık fark')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'İşlem ekle' })).toBeEnabled();
   expect(screen.queryByText('Parana daha yakından bak.')).toBeNull();
+});
+
+test('home previews navigate to budget, goal and a template draft without creating records', async () => {
+  const fake = fakeLedger(); const push = jest.fn();
+  jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  await fake.api.setBudget({ month: localDay().slice(0, 7), category_id: 'default-general', currency: 'TRY', minor: 100000 });
+  await fake.api.setGoal({ id: 'holiday', name: 'Holiday', currency: 'TRY', target_minor: 100000 });
+  await fake.api.addContribution({ id: 'saving', goalId: 'holiday', amount: { minor: 25000, currency: 'TRY' }, day: localDay() });
+  await fake.api.setTemplate({ id: 'coffee', name: 'Coffee', kind: 'expense', account_id: 'default-cash', category_id: 'default-general', currency: 'TRY', minor: 9550, note: '' });
+  await fake.api.post({ id: 'expense', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 25000, currency: 'TRY' }, occurredOn: localDay(), source: 'manual', note: '' });
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><HomeScreen /><RefreshProbe /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByRole('button', { name: /General,.*750,00 TRY/ })).toBeTruthy());
+  await fireEvent.press(screen.getByRole('button', { name: /General,.*750,00 TRY/ }));
+  expect(push).toHaveBeenLastCalledWith({ pathname: '/budget', params: { month: localDay().slice(0, 7), currency: 'TRY', category: 'default-general' } });
+  await fireEvent.press(screen.getByRole('button', { name: /Holiday,.*250,00 TRY/ }));
+  expect(push).toHaveBeenLastCalledWith({ pathname: '/goal', params: { id: 'holiday' } });
+  await fireEvent.press(screen.getByRole('button', { name: /Coffee, 95,50 TRY/ }));
+  expect(push).toHaveBeenLastCalledWith({ pathname: '/entry', params: { template: 'coffee' } });
+  expect(fake.api.post).toHaveBeenCalledTimes(1);
+  await fake.api.post({ id: 'extra', kind: 'expense', accountId: 'default-cash', categoryId: 'default-general', amount: { minor: 100000, currency: 'TRY' }, occurredOn: localDay(), source: 'manual', note: '' });
+  await fake.api.addContribution({ id: 'extra-saving', goalId: 'holiday', amount: { minor: 100000, currency: 'TRY' }, day: localDay() });
+  await fireEvent.press(screen.getByRole('button', { name: 'refresh' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: /General,.*1.250,00 TRY.*250,00 TRY/ })).toBeTruthy());
+  expect(screen.getByRole('button', { name: /Holiday,.*1.250,00 TRY/ })).toBeTruthy();
+});
+
+test('empty home sections keep all three destinations available', async () => {
+  const fake = fakeLedger(); const push = jest.fn();
+  jest.mocked(useRouter).mockReturnValue({ push, replace: jest.fn() } as unknown as ReturnType<typeof useRouter>);
+  await render(<PreferencesProvider><LedgerProvider open={fake.open}><HomeScreen /></LedgerProvider></PreferencesProvider>);
+  await waitFor(() => expect(screen.getByText('Bu ay için bütçe belirlenmedi.')).toBeTruthy());
+  for (const [name, route] of [['Bütçeler', '/(tabs)/reports'], ['Tüm birikim hedefleri', '/goals'], ['Tüm kayıt şablonları', '/templates']]) {
+    await fireEvent.press(screen.getByRole('button', { name })); expect(push).toHaveBeenLastCalledWith(route);
+  }
 });
